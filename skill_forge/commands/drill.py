@@ -1,12 +1,63 @@
+"""Drill command with structured scoring.
+
+Drill scores are STRUCTURED (YAML), not LLM text.
+Scores are parsed from LLM output and stored in front matter.
+"""
 from __future__ import annotations
 from pathlib import Path
 import os
+import re
 
 from ..config import SKILLS_DIR, DRILLS_DIR
 from ..storage import write_markdown, read_markdown, timestamp_id
 from ..templates import render_template
 from ..llm import run_llm, run_llm_with_history
 from ..skill_manager import find_skill, update_skill_metrics, update_skill_status
+
+
+def _parse_drill_scores(llm_output: str) -> dict:
+    """Parse structured scores from LLM output.
+    
+    Expects format like:
+    diagnosis: 75
+    response_quality: 70
+    next_step_control: 65
+    risk_control: 80
+    
+    Returns dict with scores and average.
+    """
+    scores = {
+        "diagnosis": 0,
+        "response_quality": 0,
+        "next_step_control": 0,
+        "risk_control": 0,
+    }
+    
+    for line in llm_output.split("\n"):
+        line = line.strip().lower()
+        for key in scores:
+            if line.startswith(f"{key}:"):
+                try:
+                    value = int(line.split(":")[1].strip())
+                    scores[key] = max(0, min(100, value))
+                except (ValueError, IndexError):
+                    pass
+    
+    avg = sum(scores.values()) / len(scores) if scores else 0
+    scores["average"] = round(avg, 1)
+    
+    return scores
+
+
+def _determine_drill_result(scores: dict) -> str:
+    """Determine drill result from scores."""
+    avg = scores.get("average", 0)
+    if avg >= 80:
+        return "success"
+    elif avg >= 60:
+        return "partial_success"
+    else:
+        return "failure"
 
 
 def drill_command(skill: str, persona: str = "", rounds: int = 5, non_interactive: bool = False) -> str:
@@ -23,7 +74,7 @@ def drill_command(skill: str, persona: str = "", rounds: int = 5, non_interactiv
             "3. 先运行 skill-forge distill 生成 Skill"
         )
 
-    _, skill_body = read_markdown(skill_path)
+    fm, skill_body = read_markdown(skill_path)
 
     # Render drill prompt
     base_prompt = render_template("drill.md", {
@@ -32,7 +83,7 @@ def drill_command(skill: str, persona: str = "", rounds: int = 5, non_interactiv
         "rounds": str(rounds),
     })
 
-    # Check for API key
+    # No API Key: output full prompt for manual use
     if not os.getenv("OPENAI_API_KEY"):
         drill_id = timestamp_id("drill")
         out_path = DRILLS_DIR / f"{drill_id}.md"
@@ -41,6 +92,9 @@ def drill_command(skill: str, persona: str = "", rounds: int = 5, non_interactiv
             "skill_id": skill,
             "persona": persona or "普通客户",
             "rounds": rounds,
+            "scores": {"diagnosis": 0, "response_quality": 0, "next_step_control": 0, "risk_control": 0},
+            "average_score": 0,
+            "result": "",
         }
         write_markdown(out_path, frontmatter, base_prompt)
         lines = [
@@ -51,6 +105,9 @@ def drill_command(skill: str, persona: str = "", rounds: int = 5, non_interactiv
             f"  - Skill: {skill}",
             f"  - 客户人格: {persona or '普通客户'}",
             f"  - 轮数: {rounds}",
+            "",
+            "下一步建议：",
+            f"  skill-forge review --file <聊天记录文件> --result \"推进\" --skill {skill}",
         ]
         return "\n".join(lines)
 
@@ -92,7 +149,7 @@ def drill_command(skill: str, persona: str = "", rounds: int = 5, non_interactiv
         dialogue_log.append(f"【客户】：{customer_msg}")
         history.append({"role": "assistant", "content": customer_msg})
 
-    # Get review
+    # Get structured review from LLM
     print(f"\n{'='*50}")
     print("正在生成复盘...")
     print(f"{'='*50}\n")
@@ -101,9 +158,19 @@ def drill_command(skill: str, persona: str = "", rounds: int = 5, non_interactiv
         base_prompt
         + "\n\n完整对话：\n"
         + "\n".join(dialogue_log)
-        + "\n\n请对用户的演练进行复盘评分。输出完整复盘。"
+        + "\n\n请对演练进行复盘。必须按以下格式输出评分（0-100分）："
+        + "\ndiagnosis: <分数>"
+        + "\nresponse_quality: <分数>"
+        + "\nnext_step_control: <分数>"
+        + "\nrisk_control: <分数>"
+        + "\n然后给出改进建议。"
     )
     review = run_llm(review_prompt)
+
+    # Parse structured scores
+    scores = _parse_drill_scores(review)
+    average_score = scores["average"]
+    drill_result = _determine_drill_result(scores)
 
     # Save drill record
     drill_id = timestamp_id("drill")
@@ -114,17 +181,29 @@ def drill_command(skill: str, persona: str = "", rounds: int = 5, non_interactiv
         "skill_id": skill,
         "persona": persona or "普通客户",
         "rounds": rounds,
+        "scores": {
+            "diagnosis": scores["diagnosis"],
+            "response_quality": scores["response_quality"],
+            "next_step_control": scores["next_step_control"],
+            "risk_control": scores["risk_control"],
+        },
+        "average_score": average_score,
+        "result": drill_result,
     }
     write_markdown(out_path, frontmatter, full_content)
 
-    # Update skill metrics
-    metrics = update_skill_metrics(skill_path)
+    # Update skill metrics with structured score
+    metrics = update_skill_metrics(skill_path, drill_result, average_score)
     new_status = update_skill_status(skill_path)
 
     lines = [
         f"\n{'='*50}",
         "演练结束。",
         f"  - 记录已保存: {out_path}",
+        f"  - 评分: diagnosis={scores['diagnosis']}, response_quality={scores['response_quality']}, "
+        f"next_step_control={scores['next_step_control']}, risk_control={scores['risk_control']}",
+        f"  - 平均分: {average_score}",
+        f"  - 结果: {drill_result}",
         f"  - Skill 指标更新: drills={metrics.get('drills', 0)}, wins={metrics.get('wins', 0)}, losses={metrics.get('losses', 0)}",
         f"  - Skill 状态: {new_status}",
         f"{'='*50}",

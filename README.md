@@ -33,20 +33,20 @@
 
 ## 当前能力边界
 
-### 已实现
+### 能力成熟度
 
-| 能力 | 说明 | 状态 |
-|------|------|------|
-| 案例导入 | 把 Markdown/JSON/YAML 导入为材料 | ✅ 可用 |
-| Skill 提炼 | 把材料转成结构化 Skill | ✅ 可用 |
-| 演练（Drill） | 模拟客户场景演练 Skill | ✅ 可用 |
-| 复盘（Review） | 分析真实对话并给出改进建议 | ✅ 可用 |
-| 推荐（Recommend） | 根据对话推荐合适的 Skill | ✅ 可用 |
-| 搜索（Search） | 按关键词/状态搜索 Skill | ✅ 可用 |
-| 版本管理 | Skill 版本号和变更记录 | ✅ 可用 |
-| 评分系统 | drill/review/recommend 评分 | ✅ 可用 |
-| 状态机 | draft→trained→tested→mature→retired | ✅ 可用 |
-| Schema 校验 | Skill 格式校验 | ✅ 可用 |
+| 能力 | 成熟度 | 说明 |
+|------|--------|------|
+| 案例导入 | 🟢 可用 | 把 Markdown/JSON/YAML 导入为材料 |
+| Skill 提炼 | 🟡 基础实现 | 把材料转成结构化 Skill，依赖 LLM 质量 |
+| 演练（Drill） | 🟡 基础实现 | 模拟客户场景，结构化评分（4维度0-100） |
+| 复盘（Review） | 🟡 基础实现 | 分析真实对话，输出缺陷分析和更新建议 |
+| 推荐（Recommend） | 🟡 基础实现 | 关键词/标签匹配 + 置信度 + 风险提醒，非向量检索 |
+| 搜索（Search） | 🟢 可用 | 按关键词/状态搜索 Skill |
+| 版本管理 | 🟡 基础实现 | snapshot + diff(difflib) + rollback，暂无完整 history 索引 |
+| 评分系统 | 🟡 基础实现 | drill/review 结构化评分，暂无人类校准和评分锚点 |
+| 状态机 | 🟡 基础实现 | 代码级强约束（drills/avg_score/field_tests/win_rate），暂无退役自动触发 |
+| Schema 校验 | 🟢 可用 | Pydantic 校验，文档和代码统一 |
 
 ### 未实现 / 有限实现
 

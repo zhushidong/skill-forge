@@ -1,12 +1,49 @@
-"""Review command with actionable update suggestions."""
+"""Review command with actionable update suggestions and structured scoring.
+
+Review scores are STRUCTURED (YAML), not LLM text.
+Scores are parsed from LLM output and stored in front matter.
+"""
 from __future__ import annotations
 from pathlib import Path
+import re
 
 from ..config import REVIEWS_DIR, SKILLS_DIR
 from ..storage import write_markdown, read_markdown, timestamp_id, safe_read_file
 from ..templates import render_template
 from ..llm import run_llm
 from ..skill_manager import find_skill, increment_field_test, update_skill_status
+
+
+def _parse_review_scores(llm_output: str) -> dict:
+    """Parse structured scores from LLM output.
+    
+    Expects format like:
+    adherence: 75
+    outcome: 80
+    improvement: 70
+    skill_defect: 60
+    """
+    scores = {
+        "adherence": 0,
+        "outcome": 0,
+        "improvement": 0,
+        "skill_defect": 0,
+    }
+    
+    for line in llm_output.split("\n"):
+        line = line.strip().lower()
+        for key in scores:
+            if line.startswith(f"{key}:"):
+                try:
+                    value = int(line.split(":")[1].strip())
+                    scores[key] = max(0, min(100, value))
+                except (ValueError, IndexError):
+                    pass
+    
+    avg = sum(scores.values()) / len(scores) if scores else 0
+    scores["average"] = round(avg, 1)
+    
+    return scores
 
 
 def review_command(file: str, result: str, skill: str = "") -> str:
@@ -35,8 +72,20 @@ def review_command(file: str, result: str, skill: str = "") -> str:
         "chatlog": chatlog,
     })
 
-    # Run LLM
-    llm_result = run_llm(prompt)
+    # Run LLM with structured scoring instruction
+    review_prompt = prompt + (
+        "\n\n请按以下格式输出评分（0-100分）："
+        "\nadherence: <是否遵循Skill步骤的分数>"
+        "\noutcome: <最终结果的分数>"
+        "\nimprovement: <相比上次进步的分数>"
+        "\nskill_defect: <Skill本身缺陷的分数（越低越好）>"
+        "\n然后给出分析和建议。"
+    )
+    llm_result = run_llm(review_prompt)
+
+    # Parse structured scores
+    scores = _parse_review_scores(llm_result)
+    total_score = scores["average"]
 
     # Generate actionable update suggestions
     update_suggestions = []
@@ -48,6 +97,7 @@ def review_command(file: str, result: str, skill: str = "") -> str:
         drills = metrics.get("drills", 0)
         field_tests = metrics.get("field_tests", 0)
         wins = metrics.get("wins", 0)
+        avg_score = metrics.get("avg_score", 0)
         
         # Check for common defects
         if drills < 3:
@@ -61,6 +111,13 @@ def review_command(file: str, result: str, skill: str = "") -> str:
             skill_defects.append({
                 "type": "low_win_rate",
                 "description": f"胜率低于60%（当前{wins}/{field_tests}）",
+                "severity": "high",
+            })
+        
+        if avg_score < 60:
+            skill_defects.append({
+                "type": "low_avg_score",
+                "description": f"平均评分低于60（当前{avg_score:.0f}）",
                 "severity": "high",
             })
         
@@ -96,6 +153,13 @@ def review_command(file: str, result: str, skill: str = "") -> str:
         "result": result,
         "skill_id": skill,
         "source_path": path.name,
+        "scores": {
+            "adherence": scores["adherence"],
+            "outcome": scores["outcome"],
+            "improvement": scores["improvement"],
+            "skill_defect": scores["skill_defect"],
+        },
+        "total_score": total_score,
         "skill_defects": skill_defects,
         "update_suggestions": update_suggestions,
     }
@@ -104,11 +168,12 @@ def review_command(file: str, result: str, skill: str = "") -> str:
     # Update skill metrics if skill exists
     metrics_info = ""
     if skill_path and skill_path.exists():
-        metrics = increment_field_test(skill_path, result)
+        metrics = increment_field_test(skill_path, result, total_score)
         new_status = update_skill_status(skill_path)
         metrics_info = (
             f"\n  - Skill 指标更新: field_tests={metrics.get('field_tests', 0)}, "
-            f"wins={metrics.get('wins', 0)}, losses={metrics.get('losses', 0)}"
+            f"wins={metrics.get('wins', 0)}, losses={metrics.get('losses', 0)}, "
+            f"avg_score={metrics.get('avg_score', 0):.0f}"
             f"\n  - Skill 状态: {new_status}"
         )
 
@@ -116,6 +181,9 @@ def review_command(file: str, result: str, skill: str = "") -> str:
     lines = [
         "复盘完成：",
         f"  - 路径: {out_path}",
+        f"  - 评分: adherence={scores['adherence']}, outcome={scores['outcome']}, "
+        f"improvement={scores['improvement']}, skill_defect={scores['skill_defect']}",
+        f"  - 总分: {total_score}",
         metrics_info,
         "",
     ]

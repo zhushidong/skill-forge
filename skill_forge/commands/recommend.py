@@ -1,4 +1,9 @@
-"""Recommend command with explanation."""
+"""Recommend command with explanation.
+
+Recommendation is keyword/tag matching + confidence scoring + risk warnings.
+Not a vector search system. Not an LLM-based recommendation engine.
+It matches customer signals, scenes, and types against local Skills.
+"""
 from __future__ import annotations
 from pathlib import Path
 
@@ -18,7 +23,6 @@ def recommend_command(file: str, context: str = "") -> str:
 
     # Read all skill front matters
     skill_files = list_markdown_files(SKILLS_DIR)
-    skills_info = []
     candidates = []
 
     for sf in skill_files:
@@ -26,60 +30,50 @@ def recommend_command(file: str, context: str = "") -> str:
             fm, _ = read_markdown(sf)
             if not fm:
                 continue
-            skill_summary = {
-                "id": fm.get("id", ""),
-                "name": fm.get("name", ""),
-                "scenes": fm.get("scenes", []),
-                "customer_stages": fm.get("customer_stages", []),
-                "customer_types": fm.get("customer_types", []),
-                "signals": fm.get("signals", []),
-                "status": fm.get("status", "draft"),
-                "metrics": fm.get("metrics", {}),
-            }
-            skills_info.append(skill_summary)
+            
+            # Extract fields using unified schema
+            skill_id = fm.get("id", "")
+            skill_name = fm.get("name", "")
+            scenes = fm.get("applicable_scenarios", [])
+            customer_signals = fm.get("customer_signals", [])
+            status = fm.get("status", "draft")
+            metrics = fm.get("metrics", {})
+            
+            # Extract metrics with defaults
+            drills = metrics.get("drills", 0)
+            field_tests = metrics.get("field_tests", 0)
+            wins = metrics.get("wins", 0)
+            losses = metrics.get("losses", 0)
+            avg_score = metrics.get("avg_score", 0)
 
             # Keyword matching with explanation
             score = 0
             matched_signals = []
             matched_scenes = []
-            matched_types = []
             
             chat_lower = chatlog.lower()
             context_lower = context.lower()
             
-            for signal in skill_summary["signals"]:
+            for signal in customer_signals:
                 if signal.lower() in chat_lower or signal.lower() in context_lower:
                     score += 2
                     matched_signals.append(signal)
-            for scene in skill_summary["scenes"]:
+            for scene in scenes:
                 if scene.lower() in chat_lower or scene.lower() in context_lower:
                     score += 1
                     matched_scenes.append(scene)
-            for ct in skill_summary["customer_types"]:
-                if ct.lower() in chat_lower or ct.lower() in context_lower:
-                    score += 1
-                    matched_types.append(ct)
-            for cs in skill_summary["customer_stages"]:
-                if cs.lower() in chat_lower or cs.lower() in context_lower:
-                    score += 1
             
             if score > 0:
                 # Calculate confidence based on score and metrics
-                metrics = skill_summary.get("metrics", {})
-                drills = metrics.get("drills", 0)
-                wins = metrics.get("wins", 0)
-                field_tests = metrics.get("field_tests", 0)
-                
-                # Base confidence from matching
                 confidence = min(score / 10, 0.7)
                 
                 # Boost confidence if skill has good track record
                 if field_tests > 0:
-                    win_rate = wins / field_tests if field_tests > 0 else 0
+                    win_rate = wins / field_tests
                     confidence += win_rate * 0.2
                 
-                # Boost confidence if skill is trained/tested
-                if skill_summary["status"] in ("trained", "tested", "mature"):
+                # Boost confidence if skill is trained/tested/mature
+                if status in ("trained", "tested", "mature"):
                     confidence += 0.1
                 
                 confidence = min(confidence, 0.95)
@@ -88,10 +82,12 @@ def recommend_command(file: str, context: str = "") -> str:
                 risk_warnings = []
                 if not matched_signals:
                     risk_warnings.append("未匹配到明确的客户信号")
-                if skill_summary["status"] == "draft":
+                if status == "draft":
                     risk_warnings.append("Skill 尚未训练，效果未验证")
                 if drills < 3:
                     risk_warnings.append(f"演练次数不足（当前{drills}次，建议至少3次）")
+                if field_tests > 0 and wins / field_tests < 0.6:
+                    risk_warnings.append(f"胜率低于60%（当前{wins}/{field_tests}）")
                 
                 # Generate explanation
                 explanation_parts = []
@@ -99,22 +95,29 @@ def recommend_command(file: str, context: str = "") -> str:
                     explanation_parts.append(f"当前对话命中客户信号：{', '.join(matched_signals)}")
                 if matched_scenes:
                     explanation_parts.append(f"匹配场景：{', '.join(matched_scenes)}")
-                if matched_types:
-                    explanation_parts.append(f"匹配客户类型：{', '.join(matched_types)}")
                 if field_tests > 0:
-                    win_rate = wins / field_tests if field_tests > 0 else 0
+                    win_rate = wins / field_tests
                     explanation_parts.append(f"历史使用成功率：{win_rate:.0%}")
-                explanation_parts.append(f"Skill 状态：{skill_summary['status']}")
+                explanation_parts.append(f"Skill 状态：{status}")
+                explanation_parts.append(f"平均评分：{avg_score:.0f}")
                 
                 candidate = {
-                    **skill_summary,
+                    "id": skill_id,
+                    "name": skill_name,
+                    "status": status,
                     "score": score,
                     "confidence": round(confidence, 2),
                     "matched_signals": matched_signals,
                     "matched_scenes": matched_scenes,
-                    "matched_types": matched_types,
                     "explanation": "\n".join(explanation_parts),
                     "risk_warnings": risk_warnings,
+                    "metrics": {
+                        "drills": drills,
+                        "field_tests": field_tests,
+                        "wins": wins,
+                        "losses": losses,
+                        "avg_score": avg_score,
+                    },
                 }
                 candidates.append(candidate)
         except Exception:
@@ -134,6 +137,8 @@ def recommend_command(file: str, context: str = "") -> str:
             candidate_text += f"- 置信度: {cs['confidence']:.0%}\n"
             candidate_text += f"- 匹配信号: {', '.join(cs['matched_signals']) or '无'}\n"
             candidate_text += f"- 匹配场景: {', '.join(cs['matched_scenes']) or '无'}\n"
+            m = cs['metrics']
+            candidate_text += f"- 演练: {m['drills']}次, 实战: {m['field_tests']}次, 胜率: {m['wins']}/{m['field_tests']}\n"
             candidate_text += f"\n**推荐原因：**\n{cs['explanation']}\n"
             if cs['risk_warnings']:
                 candidate_text += f"\n**风险提醒：**\n"

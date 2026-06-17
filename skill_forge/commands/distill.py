@@ -1,3 +1,7 @@
+"""Distill command: convert material to Skill draft.
+
+Uses unified schema from validation.py.
+"""
 from __future__ import annotations
 from pathlib import Path
 
@@ -43,16 +47,36 @@ def distill_command(material: str, problem: str, title: str = "") -> str:
     # Run LLM
     result = run_llm(prompt)
 
-    # Save skill draft
+    # Save skill draft with unified schema
     skill_id = timestamp_id("skill")
     out_path = SKILLS_DIR / "draft" / f"{skill_id}.md"
     frontmatter = {
         "id": skill_id,
         "name": title or f"从 {mat_title} 提炼",
-        "version": "0.1.0",
+        "version": "1.0.0",
         "status": "draft",
-        "source_ids": [fm.get("id", "")],
-        "source_type": "material",
+        "domain": "other",
+        "problem": problem,
+        "applicable_scenarios": [],
+        "not_applicable_scenarios": [],
+        "customer_signals": [],
+        "strategy": {"name": "", "steps": []},
+        "forbidden_behaviors": [],
+        "evidence": {
+            "source_materials": [fm.get("id", "")],
+            "drill_records": [],
+            "review_records": [],
+        },
+        "metrics": {
+            "drills": 0,
+            "field_tests": 0,
+            "wins": 0,
+            "losses": 0,
+            "avg_score": 0,
+            "last_used_at": "",
+        },
+        "created_at": _now_iso(),
+        "updated_at": _now_iso(),
     }
     write_markdown(out_path, frontmatter, result)
 
@@ -65,3 +89,8 @@ def distill_command(material: str, problem: str, title: str = "") -> str:
         f"  skill-forge drill --skill {skill_id} --persona \"目标客户类型\" --rounds 5",
     ]
     return "\n".join(lines)
+
+
+def _now_iso() -> str:
+    from datetime import datetime
+    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
