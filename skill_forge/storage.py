@@ -189,6 +189,8 @@ def slugify(text: str) -> str:
 
 
 def timestamp_id(prefix: str) -> str:
-    """Generate an ID like 'material-20260617-153000'."""
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return f"{prefix}-{ts}"
+    """Generate an ID like 'material-20260617-153000-a1b2' with millisecond+random to avoid collisions."""
+    import secrets
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:20]  # includes microseconds
+    rand = secrets.token_hex(2)
+    return f"{prefix}-{ts}-{rand}"

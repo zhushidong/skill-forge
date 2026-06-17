@@ -6,7 +6,7 @@ must use the SAME schema. This is the single source of truth.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import ClassVar, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -60,6 +60,8 @@ class SkillFrontMatter(BaseModel):
     
     This is the SINGLE source of truth. All code must read/write these fields.
     """
+    RESERVED_VERSIONS: ClassVar[set[str]] = {"latest", "current", "stable", "draft", "dev", "main", "master"}
+    
     id: str = Field(..., min_length=1, max_length=100)
     name: str = Field(..., min_length=1, max_length=200)
     version: str = Field(default="1.0.0")
@@ -105,6 +107,13 @@ class SkillFrontMatter(BaseModel):
     def validate_id(cls, v: str) -> str:
         if not v.replace('-', '').replace('_', '').isalnum():
             raise ValueError('ID must contain only alphanumeric, hyphens, and underscores')
+        return v
+    
+    @field_validator('version')
+    @classmethod
+    def validate_version(cls, v: str) -> str:
+        if v.lower() in cls.RESERVED_VERSIONS:
+            raise ValueError(f'Version "{v}" is a reserved word')
         return v
 
 

@@ -31,20 +31,24 @@ def recommend_command(file: str, context: str = "") -> str:
             if not fm:
                 continue
             
-            # Extract fields using unified schema
+            # Extract fields with old/new schema fallback
             skill_id = fm.get("id", "")
             skill_name = fm.get("name", "")
-            scenes = fm.get("applicable_scenarios", [])
-            customer_signals = fm.get("customer_signals", [])
+            # New schema: applicable_scenarios, customer_signals
+            # Old schema: scenes, signals
+            scenes = fm.get("applicable_scenarios", []) or fm.get("scenes", [])
+            customer_signals = fm.get("customer_signals", []) or fm.get("signals", [])
+            # Also match against name and domain keywords
+            name_keywords = [w for w in skill_name.split() if len(w) > 1]
             status = fm.get("status", "draft")
             metrics = fm.get("metrics", {})
             
-            # Extract metrics with defaults
-            drills = metrics.get("drills", 0)
-            field_tests = metrics.get("field_tests", 0)
-            wins = metrics.get("wins", 0)
-            losses = metrics.get("losses", 0)
-            avg_score = metrics.get("avg_score", 0)
+            # Extract metrics with defaults (handle nested or flat)
+            drills = metrics.get("drills", 0) if isinstance(metrics, dict) else 0
+            field_tests = metrics.get("field_tests", 0) if isinstance(metrics, dict) else 0
+            wins = metrics.get("wins", 0) if isinstance(metrics, dict) else 0
+            losses = metrics.get("losses", 0) if isinstance(metrics, dict) else 0
+            avg_score = metrics.get("avg_score", 0) if isinstance(metrics, dict) else 0
 
             # Keyword matching with explanation
             score = 0
@@ -62,6 +66,11 @@ def recommend_command(file: str, context: str = "") -> str:
                 if scene.lower() in chat_lower or scene.lower() in context_lower:
                     score += 1
                     matched_scenes.append(scene)
+            # Fallback: match name keywords against chat content
+            for kw in name_keywords:
+                if kw.lower() in chat_lower or kw.lower() in context_lower:
+                    score += 1
+                    matched_scenes.append(f"名称关键词: {kw}")
             
             if score > 0:
                 # Calculate confidence based on score and metrics

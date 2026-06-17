@@ -174,5 +174,56 @@ def rollback(
     console.print(result)
 
 
+@app.command()
+def validate(
+    file: str = typer.Option(..., "--file", "-f", help="要验证的文件路径"),
+    category: str = typer.Option("auto", "--category", "-c", help="资产类型 (auto/materials/skills/drills/reviews)"),
+):
+    """校验文件是否符合 Schema 规范。"""
+    from pathlib import Path
+    from .storage import read_markdown
+    from .validation import validate_front_matter, SCHEMA_MAP
+    
+    path = Path(file)
+    try:
+        fm, body = read_markdown(path)
+    except Exception as e:
+        console.print(f"[red]文件读取失败: {e}[/red]")
+        return
+    
+    if not fm:
+        console.print("[yellow]未找到 YAML front matter[/yellow]")
+        return
+    
+    # Auto-detect category
+    if category == "auto":
+        if "scores" in fm and "skill_id" in fm:
+            if "result" in fm and fm.get("result") in ("推进", "成交", "失败", "流失"):
+                category = "reviews"
+            else:
+                category = "drills"
+        elif "customer_signals" in fm or "applicable_scenarios" in fm or fm.get("status") in ("draft", "trained", "tested", "mature", "retired"):
+            category = "skills"
+        elif "type" in fm and fm.get("type") in ("article", "book", "chatlog", "case", "comment", "prompt", "workflow", "external_agent", "external_skill"):
+            category = "materials"
+        else:
+            category = "materials"
+    
+    is_valid, errors = validate_front_matter(fm, category)
+    
+    if is_valid:
+        console.print(f"[green]校验通过[/green] (类型: {category})")
+        console.print(f"  ID: {fm.get('id', 'N/A')}")
+        console.print(f"  Name: {fm.get('name', 'N/A')}")
+        if "version" in fm:
+            console.print(f"  Version: {fm['version']}")
+        if "status" in fm:
+            console.print(f"  Status: {fm['status']}")
+    else:
+        console.print(f"[red]校验失败[/red] (类型: {category})")
+        for err in errors:
+            console.print(f"  - {err}")
+
+
 if __name__ == "__main__":
     app()

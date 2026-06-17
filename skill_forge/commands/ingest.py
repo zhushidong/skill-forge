@@ -27,7 +27,7 @@ def ingest_command(
         p = Path(file)
         try:
             content = safe_read_file(p)
-        except ValueError as e:
+        except (ValueError, FileNotFoundError, OSError) as e:
             return f"文件读取失败: {e}"
         # Store only filename, not full path (M4 fix)
         source_path = p.name
@@ -35,6 +35,16 @@ def ingest_command(
         content = text
     else:
         return "请提供 --file 或 --text 参数。"
+
+    # Content safety scan (T10 fix)
+    from ..llm import sanitize_user_input
+    safe_content = sanitize_user_input(content)
+    # Check if content was modified (filtered)
+    if safe_content != content:
+        warning_msg = "  ⚠ 内容包含安全过滤词，已自动替换"
+        content = f"[安全扫描警告]\n{warning_msg}\n[原始内容已被标记，仅供参考]\n\n{safe_content}"
+    else:
+        content = safe_content
 
     # Generate ID and path
     material_id = timestamp_id("material")
