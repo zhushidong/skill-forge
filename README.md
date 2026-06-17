@@ -1,10 +1,25 @@
 # Skill Forge
 
-商业 Skill 炼丹炉 - 把资料、客户对话、外部 Agent/Prompt/Skill 熔炼成可演练、可复盘、可推荐的商业 Skill。
+面向销售、客服、培训团队的商业经验结构化工具。
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/Tests-49%20passed-brightgreen.svg)](#测试)
+
+## 什么是商业 Skill？
+
+在 Skill Forge 中，一个商业 Skill 是一份**结构化的业务应对策略**，通常来自真实案例、聊天记录或培训材料。它包含：
+
+- 适用场景
+- 客户信号
+- 应对步骤
+- 示例话术
+- 禁用行为
+- 演练方法
+- 复盘指标
+- 历史效果
+
+**Skill 不是 Prompt**。Prompt 是给 LLM 的指令，Skill 是给业务人员的可执行策略。
 
 ## 解决什么问题？
 
@@ -14,32 +29,46 @@
 - 遇到新客户场景时，不知道该用哪招
 - 培训新人靠"师父带"，效率低、质量不稳定
 
-**解决方案**：Skill Forge 把这些散落的经验"熔炼"成标准化的 Skill，每个 Skill 是一个：
-- **可训练的**：通过演练（drill）不断优化
-- **可复盘的**：每次真实使用后复盘效果
-- **可推荐的**：根据当前客户对话，自动推荐最合适的 Skill
+**解决方案**：Skill Forge 把这些散落的经验"结构化"成标准 Skill，通过演练和复盘持续改进。
 
-## 适合谁？
+## 当前能力边界
 
-- **销售团队**：把成功案例提炼成可复用的销售技巧
-- **客服团队**：把常见问题处理流程标准化
-- **培训部门**：用 Skill 演练替代传统培训
-- **个人创业者**：把自己的经验产品化
+### 已实现
 
-## 和同类项目有什么不同？
+| 能力 | 说明 | 状态 |
+|------|------|------|
+| 案例导入 | 把 Markdown/JSON/YAML 导入为材料 | ✅ 可用 |
+| Skill 提炼 | 把材料转成结构化 Skill | ✅ 可用 |
+| 演练（Drill） | 模拟客户场景演练 Skill | ✅ 可用 |
+| 复盘（Review） | 分析真实对话并给出改进建议 | ✅ 可用 |
+| 推荐（Recommend） | 根据对话推荐合适的 Skill | ✅ 可用 |
+| 搜索（Search） | 按关键词/状态搜索 Skill | ✅ 可用 |
+| 版本管理 | Skill 版本号和变更记录 | ✅ 可用 |
+| 评分系统 | drill/review/recommend 评分 | ✅ 可用 |
+| 状态机 | draft→trained→tested→mature→retired | ✅ 可用 |
+| Schema 校验 | Skill 格式校验 | ✅ 可用 |
 
-| 特性 | Skill Forge | PromptForge | Sklm | skills-management |
-|------|-------------|-------------|------|-------------------|
-| **核心目标** | 商业 Skill 管理 | Prompt 版本控制 | AI Agent 管理 | 符号链接管理 |
-| **输出格式** | Markdown + YAML | JSON | 多格式 | 符号链接 |
-| **演练机制** | ✅ 回合制演练 | ❌ | ❌ | ❌ |
-| **复盘系统** | ✅ 真实沟通复盘 | ❌ | ❌ | ❌ |
-| **推荐引擎** | ✅ 基于对话推荐 | ❌ | ❌ | ❌ |
-| **状态机** | ✅ draft→trained→tested→mature | ❌ | ❌ | ❌ |
-| **无 API Key 使用** | ✅ 输出完整 Prompt | ❌ | ❌ | ❌ |
-| **安全审计** | ✅ 3 轮攻防修复 | ❌ | ❌ | ❌ |
+### 未实现 / 有限实现
 
-**核心差异**：Skill Forge 不只是"生成 Prompt"，而是构建一个完整的**商业 Skill 生命周期管理系统**。
+| 能力 | 当前状态 | 说明 |
+|------|---------|------|
+| 自动 LLM 调用 | 需要 API Key | 无 Key 时输出完整 Prompt |
+| 向量检索 | ❌ 未实现 | 当前是关键词匹配 |
+| Web UI | ❌ 未实现 | 只有 CLI |
+| 多人协作 | ❌ 未实现 | 只支持本地 |
+| 自动退化监控 | ❌ 未实现 | 需要手动检查 |
+| 组织偏好配置 | ❌ 未实现 | 所有 Skill 通用 |
+| PII 脱敏 | ⚠️ 提示但不自动 | 需要用户自行处理 |
+| 审计日志 | ❌ 未实现 | 无操作记录 |
+
+## 能力边界声明
+
+- **默认不联网**：所有数据存储在本地
+- **默认不调用 API**：无 API Key 时输出完整 Prompt
+- **不执行外部 Agent/Skill**：仅作为文本解析
+- **不保证推荐准确**：推荐基于关键词匹配，需要人工判断
+- **不保证话术合规**：生成的话术需要用户自行审核
+- **不自动脱敏**：聊天记录可能包含敏感信息，需要用户自行处理
 
 ## 快速开始（3 分钟）
 
@@ -75,76 +104,12 @@ skill-forge search
 
 **没有 API Key？** 没关系！所有命令会输出完整 Prompt，你可以复制到 ChatGPT、Claude、Kimi 等任意大模型中使用。
 
-## 输入/输出格式
+## 完整生命周期示例
 
-### 输入
+详见 [golden-lifecycle.md](examples/golden-lifecycle.md)
 
-| 类型 | 格式 | 示例 |
-|------|------|------|
-| 案例 | Markdown | `samples/case-price.md` |
-| 聊天记录 | Markdown | `samples/current-chat.md` |
-| 外部 Agent | Markdown/JSON/YAML | `samples/external-agent.md` |
-| 外部 Skill | JSON | `samples/external-skill.json` |
-
-### 输出
-
-| 类型 | 格式 | 位置 |
-|------|------|------|
-| Skill | Markdown + YAML | `data/skills/draft/` |
-| 演练记录 | Markdown + YAML | `data/drills/` |
-| 复盘记录 | Markdown + YAML | `data/reviews/` |
-| 推荐记录 | Markdown + YAML | `data/recommendations/` |
-
-### Skill 输出格式
-
-```markdown
----
-id: skill-20260617-153000
-name: 价格异议处理
-version: 1
-status: trained
-scenes:
-  - 客户说太贵
-  - 预算不足
-signals:
-  - 价格
-  - 贵
-  - 预算
-customer_types:
-  - 价格敏感型客户
-drills: 3
-field_tests: 2
-wins: 2
-losses: 0
----
-
-# 价格异议处理 Skill
-
-## 解决的问题
-客户以"太贵了"为由拒绝购买时，如何有效回应。
-
-## 信号识别
-当客户说出以下关键词时，激活此 Skill：
-- "太贵了"
-- "预算不够"
-- "能不能便宜点"
-
-## 执行步骤
-1. 先认同客户的顾虑
-2. 了解客户的真实预算
-3. 展示价值而非降价
-4. 提供分期/套餐选项
-```
-
-## 安全特性
-
-- **路径验证**：防止目录遍历攻击
-- **LLM 输入净化**：防止 Prompt 注入（Unicode NFKC 标准化 + 零宽字符剥离）
-- **原子读取**：防止 TOCTOU 竞态条件
-- **模板注入防护**：防止模板语法注入
-- **错误信息脱敏**：防止敏感信息泄露
-
-经过 3 轮沙盘攻防测试，修复了 15+ 个安全漏洞。
+展示一个 Skill 从原始案例到成熟状态的完整过程：
+- 原始案例 → 导入 → 提炼 → 演练 → 状态流转 → 实战复盘 → 版本更新 → 多次实战 → 成熟
 
 ## 命令列表
 
@@ -168,22 +133,69 @@ losses: 0
 draft → trained → tested → mature → retired
 ```
 
-- `draft`: 草稿，未演练
-- `trained`: 经过至少 3 次 drill
-- `tested`: 经过至少 1 次真实 review
-- `mature`: 多次实战有效（胜率 > 60%）
-- `retired`: 过时或效果差
+### 状态流转规则
 
-系统会自动根据 drill/review 次数和结果更新状态。
+| 流转 | 条件 |
+|------|------|
+| draft → trained | 完成 3 次 drill，平均分 >= 60 |
+| trained → tested | 完成 1 次真实 review，结果为"推进" |
+| tested → mature | field_tests >= 5，胜率 >= 60%，平均分 >= 70 |
+| mature → retired | 90 天无使用 或 3/5 次失败 或 手动退役 |
 
-## 产品原则
+详见 [skill-schema.md](examples/skill-schema.md)
 
-- 不欺骗客户
-- 不编造案例
-- 不制造虚假稀缺
-- 不诱导明显不适合的人购买
-- 优先理解客户真实需求
-- 让人和 Agent 一起变强
+## 评分系统
+
+### Drill 评分（0-100）
+
+| 维度 | 权重 | 说明 |
+|------|------|------|
+| diagnosis | 25% | 是否准确识别客户问题 |
+| response_quality | 25% | 回应质量和话术水平 |
+| next_step_control | 25% | 是否推进到下一步 |
+| risk_control | 25% | 是否避免禁用行为 |
+
+### Review 评分（0-100）
+
+| 维度 | 权重 | 说明 |
+|------|------|------|
+| adherence | 30% | 是否遵循 Skill 步骤 |
+| outcome | 30% | 最终结果 |
+| improvement | 20% | 相比上次是否有进步 |
+| skill_defect | 20% | Skill 本身的缺陷 |
+
+详见 [scoring-rubric.md](examples/scoring-rubric.md)
+
+## 和同类项目对比
+
+| 类型 | 代表项目 | 解决问题 | Skill Forge 差异 |
+|------|---------|---------|-----------------|
+| Prompt 管理 | PromptLayer / PromptForge | Prompt 版本与评估 | Skill Forge 更偏业务经验结构化 |
+| Agent Skill | Claude Code Skills | 工具能力封装 | Skill Forge 更偏销售/客服话术与演练 |
+| Workflow | Dify / LangGraph | 应用流程编排 | Skill Forge 更轻量、本地优先 |
+| 知识库 | Notion / 飞书文档 | 存储知识 | Skill Forge 强调演练、复盘、推荐 |
+| CRM 辅助 | Gong / Chorus | 销售对话分析 | Skill Forge 更偏开源、本地、可定制 |
+
+详见 [comparison.md](examples/comparison.md)
+
+## 项目结构
+
+```
+skill-forge/
+├── skill_forge/           # 核心代码
+│   ├── cli.py            # CLI 入口
+│   ├── commands/         # 命令实现
+│   ├── adapters/         # 适配器
+│   ├── storage.py        # 存储层
+│   ├── llm.py            # LLM 调用
+│   ├── templates.py      # 模板渲染
+│   └── validation.py     # Schema 校验
+├── templates/            # Prompt 模板
+├── samples/              # 示例文件
+├── examples/             # 文档和示例
+├── tests/                # 测试
+└── data/                 # 用户数据（gitignore）
+```
 
 ## 测试
 
@@ -204,12 +216,33 @@ python -m pytest tests/ --cov=skill_forge --cov-report=term-missing
 
 ## 路线图
 
-- [ ] Skill 版本 diff
-- [ ] MCP/Agent 调用接口
-- [ ] Web UI
-- [ ] 向量检索
-- [ ] 多模型支持
-- [ ] CI/CD 自动化测试
+### v0.2：质量标准
+
+- [ ] `skill-forge validate`：Skill 格式校验
+- [ ] `skill-forge score`：Skill 健康度评分
+- [ ] 状态流转规则自动执行
+- [ ] 失败原因分类
+
+### v0.3：推荐增强
+
+- [ ] 推荐解释输出
+- [ ] 多 Skill 排序
+- [ ] 不推荐机制
+- [ ] 使用反馈记录
+
+### v0.4：版本管理
+
+- [ ] Skill 版本历史
+- [ ] `skill-forge diff`：版本对比
+- [ ] `skill-forge history`：变更历史
+- [ ] `skill-forge rollback`：版本回滚
+
+### v0.5：业务样例库
+
+- [ ] 10 个销售场景
+- [ ] 5 个客服场景
+- [ ] 5 个培训场景
+- [ ] 每个场景完整链路
 
 ## 贡献
 
