@@ -1,3 +1,4 @@
+"""Review command with actionable update suggestions."""
 from __future__ import annotations
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from ..skill_manager import find_skill, increment_field_test, update_skill_statu
 
 
 def review_command(file: str, result: str, skill: str = "") -> str:
-    """Review a real customer interaction."""
+    """Review a real customer interaction with actionable suggestions."""
     path = Path(file)
     try:
         chatlog = safe_read_file(path)
@@ -19,10 +20,11 @@ def review_command(file: str, result: str, skill: str = "") -> str:
     # Find skill content if specified
     skill_content = ""
     skill_path = None
+    skill_fm = {}
     if skill:
         skill_path = find_skill(skill)
         if skill_path and skill_path.exists():
-            _, skill_content = read_markdown(skill_path)
+            skill_fm, skill_content = read_markdown(skill_path)
         else:
             skill_content = f"（未找到 Skill：{skill}）"
 
@@ -36,7 +38,56 @@ def review_command(file: str, result: str, skill: str = "") -> str:
     # Run LLM
     llm_result = run_llm(prompt)
 
-    # Save review
+    # Generate actionable update suggestions
+    update_suggestions = []
+    skill_defects = []
+    
+    if skill_path and skill_path.exists():
+        # Analyze skill defects based on review result
+        metrics = skill_fm.get("metrics", {})
+        drills = metrics.get("drills", 0)
+        field_tests = metrics.get("field_tests", 0)
+        wins = metrics.get("wins", 0)
+        
+        # Check for common defects
+        if drills < 3:
+            skill_defects.append({
+                "type": "insufficient_drills",
+                "description": f"演练次数不足（当前{drills}次，建议至少3次）",
+                "severity": "medium",
+            })
+        
+        if field_tests > 0 and wins / field_tests < 0.6:
+            skill_defects.append({
+                "type": "low_win_rate",
+                "description": f"胜率低于60%（当前{wins}/{field_tests}）",
+                "severity": "high",
+            })
+        
+        # Generate specific update suggestions based on result
+        if result in ("失败", "流失"):
+            update_suggestions.append({
+                "type": "add_scenario",
+                "description": "补充此失败场景到 applicable_scenarios",
+                "action": "在 applicable_scenarios 中添加当前场景描述",
+                "priority": "high",
+            })
+            update_suggestions.append({
+                "type": "add_forbidden",
+                "description": "记录导致失败的行为到 forbidden_behaviors",
+                "action": "在 forbidden_behaviors 中添加失败原因",
+                "priority": "high",
+            })
+        
+        if result in ("推进", "成交"):
+            update_suggestions.append({
+                "type": "document_success",
+                "description": "记录成功模式到 strategy",
+                "action": "在 strategy.steps 中补充成功的关键步骤",
+                "priority": "medium",
+            })
+
+    # Save review with suggestions
     review_id = timestamp_id("review")
     out_path = REVIEWS_DIR / f"{review_id}.md"
     frontmatter = {
@@ -44,7 +95,9 @@ def review_command(file: str, result: str, skill: str = "") -> str:
         "type": "review",
         "result": result,
         "skill_id": skill,
-        "source_path": path.name,  # Only store filename (M4 fix)
+        "source_path": path.name,
+        "skill_defects": skill_defects,
+        "update_suggestions": update_suggestions,
     }
     write_markdown(out_path, frontmatter, llm_result)
 
@@ -59,11 +112,32 @@ def review_command(file: str, result: str, skill: str = "") -> str:
             f"\n  - Skill 状态: {new_status}"
         )
 
+    # Format output with actionable suggestions
     lines = [
         "复盘完成：",
         f"  - 路径: {out_path}",
         metrics_info,
         "",
-        "注意：review 不会直接修改 Skill 内容，修改建议需人工确认后执行。",
     ]
+    
+    if skill_defects:
+        lines.append("## Skill 缺陷分析\n")
+        for defect in skill_defects:
+            lines.append(f"- **{defect['type']}** ({defect['severity']}): {defect['description']}")
+        lines.append("")
+    
+    if update_suggestions:
+        lines.append("## 可执行更新建议\n")
+        for suggestion in update_suggestions:
+            lines.append(f"### {suggestion['type']} ({suggestion['priority']})")
+            lines.append(f"- 描述: {suggestion['description']}")
+            lines.append(f"- 操作: {suggestion['action']}")
+            lines.append("")
+        lines.append("**下一步:** 执行 `skill-forge propose-update` 生成更新提案，确认后应用。")
+    
+    lines.extend([
+        "",
+        "注意：review 不会直接修改 Skill 内容，修改建议需人工确认后执行。",
+    ])
+    
     return "\n".join(lines)

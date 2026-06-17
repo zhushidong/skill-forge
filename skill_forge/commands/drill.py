@@ -128,5 +128,9 @@ def drill_command(skill: str, persona: str = "", rounds: int = 5, non_interactiv
         f"  - Skill 指标更新: drills={metrics.get('drills', 0)}, wins={metrics.get('wins', 0)}, losses={metrics.get('losses', 0)}",
         f"  - Skill 状态: {new_status}",
         f"{'='*50}",
+        "",
+        "下一步建议：",
+        f"  skill-forge review --file <聊天记录文件> --result \"推进\" --skill {skill}",
+        f"  skill-forge search --query \"{skill}\"",
     ]
     return "\n".join(lines)

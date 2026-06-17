@@ -4,7 +4,7 @@ from rich.console import Console
 
 app = typer.Typer(
     name="skill-forge",
-    help="商业 Skill 炼丹炉 - 把资料和外部 Agent 熔炼成可演练、可复盘、可推荐的商业 Skill",
+    help="面向销售、客服、培训团队的商业经验结构化工具",
     no_args_is_help=True,
 )
 console = Console()
@@ -138,6 +138,39 @@ def apply_update_cmd(
     """应用更新提案（需人工确认）。"""
     from .commands.propose_update import apply_update_command
     result = apply_update_command(proposal=proposal, skill=skill)
+    console.print(result)
+
+
+@app.command()
+def history(
+    skill: str = typer.Option(..., "--skill", "-s", help="Skill ID 或文件路径"),
+):
+    """查看 Skill 版本历史。"""
+    from .commands.version_cmd import history_command
+    result = history_command(skill=skill)
+    console.print(result)
+
+
+@app.command()
+def diff(
+    skill: str = typer.Option(..., "--skill", "-s", help="Skill ID 或文件路径"),
+    from_version: str = typer.Option(..., "--from", help="起始版本号"),
+    to_version: str = typer.Option("current", "--to", help="目标版本号（默认当前版本）"),
+):
+    """对比 Skill 两个版本的差异。"""
+    from .commands.version_cmd import diff_command
+    result = diff_command(skill=skill, from_version=from_version, to_version=to_version)
+    console.print(result)
+
+
+@app.command()
+def rollback(
+    skill: str = typer.Option(..., "--skill", "-s", help="Skill ID 或文件路径"),
+    to_version: str = typer.Option(..., "--to", help="要回滚到的版本号"),
+):
+    """回滚 Skill 到指定版本。"""
+    from .commands.version_cmd import rollback_command
+    result = rollback_command(skill=skill, to_version=to_version)
     console.print(result)
 
 
