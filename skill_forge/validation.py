@@ -82,8 +82,11 @@ class SkillFrontMatter(BaseModel):
     # Forbidden behaviors
     forbidden_behaviors: list[str] = Field(default_factory=list)
     
-    # Version info
+    # Version chain
     parent_version: str = Field(default="")
+    supersedes: str = Field(default="")
+    superseded_by: str = Field(default="")
+    inherited_metrics: bool = Field(default=False)
     change_type: str = Field(default="initial")
     change_reason: str = Field(default="")
     changed_by: str = Field(default="")

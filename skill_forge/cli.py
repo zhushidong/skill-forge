@@ -225,5 +225,40 @@ def validate(
             console.print(f"  - {err}")
 
 
+@app.command(name="promote")
+def promote_cmd(
+    skill: str = typer.Option(..., "--skill", "-s", help="skill id or file path"),
+    to: str = typer.Option(..., "--to", "-t", help="target status: draft|trained|tested|mature|retired"),
+):
+    """Manually promote Skill status."""
+    from .commands.promote import promote
+    promote(skill=skill, to=to)
+
+
+@app.command(name="field-log")
+def field_log_cmd(
+    skill: str = typer.Option(..., "--skill", "-s", help="associated skill id or file path"),
+    result: str = typer.Option(..., "--result", "-r", help="result: 成交|推进|搁置|失败"),
+    file: str = typer.Option(None, "--file", "-f", help="field record file path"),
+    note: str = typer.Option("", "--note", "-n", help="note text"),
+    customer_type: str = typer.Option("", "--customer-type", "-c", help="customer type"),
+    scene: str = typer.Option("", "--scene", help="scene"),
+):
+    """Record field test, auto-update skill metrics and check promotion."""
+    from .commands.field_log import field_log
+    field_log(skill=skill, result=result, file=file, note=note, customer_type=customer_type, scene=scene)
+
+
+@app.command(name="apply-review")
+def apply_review_cmd(
+    review: str = typer.Option(..., "--review", "-r", help="review id or file path"),
+    skill: str = typer.Option(..., "--skill", "-s", help="skill id or file path"),
+    note: str = typer.Option("", "--note", "-n", help="update note"),
+):
+    """Apply review findings to create new Skill version."""
+    from .commands.apply_review import apply_review
+    apply_review(review=review, skill=skill, note=note)
+
+
 if __name__ == "__main__":
     app()

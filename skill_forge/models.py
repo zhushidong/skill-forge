@@ -3,8 +3,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 
-def _now_iso() -> str:
+def now_iso() -> str:
+    """Return current ISO timestamp."""
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _now_iso() -> str:
+    return now_iso()
 
 
 @dataclass

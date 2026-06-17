@@ -24,6 +24,15 @@ MATERIAL_TYPES = {
 
 SKILL_STATUSES = ["draft", "trained", "tested", "mature", "retired"]
 
+# Mapping from status to directory name
+SKILL_STATUS_DIR = {
+    "draft": "draft",
+    "trained": "trained",
+    "tested": "tested",
+    "mature": "mature",
+    "retired": "retired",
+}
+
 MATERIAL_DIR = DATA_DIR / "materials"
 SKILLS_DIR = DATA_DIR / "skills"
 DRILLS_DIR = DATA_DIR / "drills"
@@ -32,3 +41,4 @@ REVIEWS_DIR = DATA_DIR / "reviews"
 RECOMMENDATIONS_DIR = DATA_DIR / "recommendations"
 IMPORTS_DIR = DATA_DIR / "imports"
 PROFILES_DIR = DATA_DIR / "profiles"
+PROPOSALS_DIR = DATA_DIR / "proposals"

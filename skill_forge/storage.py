@@ -194,3 +194,26 @@ def timestamp_id(prefix: str) -> str:
     ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:20]  # includes microseconds
     rand = secrets.token_hex(2)
     return f"{prefix}-{ts}-{rand}"
+
+
+def skill_path_by_status(status: str, skill_id: str) -> Path:
+    """Get the file path for a skill with given status."""
+    from .config import SKILL_STATUS_DIR, SKILLS_DIR
+    subdir = SKILL_STATUS_DIR.get(status, status)
+    return SKILLS_DIR / subdir / f"{skill_id}.md"
+
+
+def all_skill_files() -> list[Path]:
+    """List all skill files across all status directories."""
+    from .config import SKILLS_DIR
+    all_files = []
+    for status_dir in SKILLS_DIR.iterdir():
+        if status_dir.is_dir():
+            all_files.extend(status_dir.rglob("*.md"))
+    return sorted(all_files)
+
+
+def workspace_initialized() -> bool:
+    """Check if workspace has been initialized."""
+    from .config import DATA_DIR, TEMPLATES_DIR
+    return DATA_DIR.exists() and TEMPLATES_DIR.exists()
