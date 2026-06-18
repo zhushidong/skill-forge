@@ -111,22 +111,40 @@ def recommend(
 @app.command(name="search")
 def search_cmd(
     query: str = typer.Option("", "--query", "-q", help="搜索关键词"),
+    scene: str = typer.Option("", "--scene", "-s", help="场景"),
+    signal: str = typer.Option("", "--signal", help="客户信号"),
+    customer_type: str = typer.Option("", "--customer-type", "-c", help="客户类型"),
+    stage: str = typer.Option("", "--stage", help="客户阶段"),
     status: str = typer.Option("", "--status", help="按状态筛选"),
+    limit: int = typer.Option(20, "--limit", "-l", help="最多返回数量"),
+    include_superseded: bool = typer.Option(False, "--include-superseded", help="包含被取代的旧版本"),
+    json_output: bool = typer.Option(False, "--json", help="输出JSON"),
 ):
-    """搜索或列出本地 Skill。"""
+    """按多维度检索 Skill。"""
     from .commands.search import search_command
-    result = search_command(query=query, status=status)
+    result = search_command(
+        query=query,
+        scene=scene,
+        signal=signal,
+        customer_type=customer_type,
+        stage=stage,
+        status=status,
+        limit=limit,
+        include_superseded=include_superseded,
+        json_output=json_output,
+    )
     console.print(result)
 
 
 @app.command(name="propose-update")
 def propose_update_cmd(
-    skill: str = typer.Option(..., "--skill", "-s", help="Skill ID 或文件路径"),
+    skill: str = typer.Option("", "--skill", "-s", help="skill id 或文件路径，不指定则扫描所有 mature/tested"),
     reason: str = typer.Option("", "--reason", "-r", help="更新原因"),
+    limit: int = typer.Option(5, "--limit", "-l", help="最多处理几个 skill"),
 ):
-    """生成 Skill 更新提案。"""
+    """基于实战数据提出 Skill 更新提案。"""
     from .commands.propose_update import propose_update_command
-    result = propose_update_command(skill=skill, reason=reason)
+    result = propose_update_command(skill=skill, reason=reason, limit=limit)
     console.print(result)
 
 

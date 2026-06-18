@@ -17,7 +17,7 @@ class MaterialFrontMatter(BaseModel):
     """Schema for material front matter."""
     id: str = Field(..., min_length=1, max_length=100)
     type: str = Field(..., pattern=r'^(article|book|chatlog|case|comment|prompt|workflow|external_agent|external_skill)$')
-    source: str = Field(..., min_length=1, max_length=200)
+    source: str = Field(default="", max_length=200)
     title: str = Field(default="")
     created_at: Optional[str] = None
     tags: list[str] = Field(default_factory=list)
@@ -43,8 +43,18 @@ class SkillMetrics(BaseModel):
 
 
 class SkillStrategy(BaseModel):
-    """Strategy block for Skill."""
+    """Strategy block for Skill.
+
+    Supports the four quality dimensions plus arbitrary extra fields
+    so that templates can evolve without schema changes.
+    """
+    model_config = {"extra": "allow"}
+
     name: str = Field(default="")
+    diagnosis: str = Field(default="")
+    response_quality: str = Field(default="")
+    next_step_control: str = Field(default="")
+    risk_control: str = Field(default="")
     steps: list[dict] = Field(default_factory=list)
 
 
@@ -67,18 +77,29 @@ class SkillFrontMatter(BaseModel):
     version: str = Field(default="1.0.0")
     status: str = Field(..., pattern=r'^(draft|trained|tested|mature|retired)$')
     domain: str = Field(default="other")
+    category: str = Field(default="")
     problem: str = Field(default="")
-    
+    goal: str = Field(default="")
+
+    # Customer classification
+    customer_types: list[str] = Field(default_factory=list)
+    customer_stages: list[str] = Field(default_factory=list)
+
     # Scenarios
     applicable_scenarios: list[str] = Field(default_factory=list)
     not_applicable_scenarios: list[str] = Field(default_factory=list)
-    
+
     # Signals
     customer_signals: list[str] = Field(default_factory=list)
-    
+
     # Strategy
     strategy: SkillStrategy = Field(default_factory=SkillStrategy)
-    
+
+    # Executable content
+    steps: list[str] = Field(default_factory=list)
+    example_lines: list[str] = Field(default_factory=list)
+    drill_personas: list[str] = Field(default_factory=list)
+
     # Forbidden behaviors
     forbidden_behaviors: list[str] = Field(default_factory=list)
     
@@ -174,7 +195,7 @@ class ReviewFrontMatter(BaseModel):
     id: str = Field(..., min_length=1, max_length=100)
     skill_id: str = Field(..., min_length=1, max_length=100)
     created_at: str = Field(default="")
-    result: str = Field(..., pattern=r'^(推进|成交|失败|流失)$')
+    result: str = Field(..., pattern=r'^(推进|成交|失败|流失|搁置|停滞)$')
     source_path: str = Field(default="")
     scores: ReviewScores = Field(default_factory=ReviewScores)
     total_score: float = Field(default=0.0, ge=0, le=100)

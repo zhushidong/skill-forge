@@ -1,11 +1,12 @@
 from __future__ import annotations
 import re
 from pathlib import Path
+from typing import Any
 
 from .config import TEMPLATES_DIR
 
 
-def render_template(template_name: str, variables: dict[str, str]) -> str:
+def render_template(template_name: str, variables: dict[str, Any]) -> str:
     """Read a template and replace {{key}} placeholders with values.
     
     H4 fix: Escapes template syntax in variable values to prevent injection.
@@ -22,7 +23,9 @@ def render_template(template_name: str, variables: dict[str, str]) -> str:
     
     for key, value in variables.items():
         # H4 fix: Escape template syntax in variable values
-        safe_value = _escape_template_syntax(value or "")
+        # Coerce non-string values to string so metrics/numbers work safely
+        str_value = "" if value is None else str(value)
+        safe_value = _escape_template_syntax(str_value)
         text = text.replace("{{" + key + "}}", safe_value)
 
     # Remove remaining unreplaced placeholders

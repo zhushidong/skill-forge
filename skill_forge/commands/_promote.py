@@ -3,9 +3,9 @@
 Used by drill / review / field_log / promote to avoid scattered rules.
 
 Auto-promotion thresholds:
-  draft    -> trained : drills >= 2
-  trained  -> tested  : wins >= 2
-  tested   -> mature  : wins >= 5 AND losses < wins * 0.3
+  draft    -> trained : drills >= 3 AND avg_score >= 60
+  trained  -> tested  : field_tests >= 1
+  tested   -> mature  : field_tests >= 5 AND win_rate >= 0.6 AND avg_score >= 70
   retired  : manual only
 
 Valid status order:
@@ -24,14 +24,22 @@ from ..models import now_iso
 _STATUS_ORDER = ["draft", "trained", "tested", "mature"]
 _ALL_STATUSES = _STATUS_ORDER + ["retired"]
 
-# Auto-promotion rules
+# Auto-promotion rules (aligned with skill_manager.py and golden-lifecycle.md)
 _AUTO_PROMOTE_RULES: dict[str, dict[str, Any]] = {
-    "draft": {"to": "trained", "check": lambda m: m.get("drills", 0) >= 2},
-    "trained": {"to": "tested", "check": lambda m: m.get("wins", 0) >= 2},
+    "draft": {
+        "to": "trained",
+        "check": lambda m: m.get("drills", 0) >= 3 and m.get("avg_score", 0) >= 60,
+    },
+    "trained": {
+        "to": "tested",
+        "check": lambda m: m.get("field_tests", 0) >= 1,
+    },
     "tested": {
         "to": "mature",
-        "check": lambda m: m.get("wins", 0) >= 5
-        and m.get("losses", 0) < m.get("wins", 0) * 0.3,
+        "check": lambda m: m.get("field_tests", 0) >= 5
+        and m.get("field_tests", 0) > 0
+        and (m.get("wins", 0) / m.get("field_tests", 1)) >= 0.6
+        and m.get("avg_score", 0) >= 70,
     },
 }
 

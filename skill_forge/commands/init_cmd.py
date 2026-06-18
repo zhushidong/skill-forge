@@ -4,7 +4,7 @@ from ..storage import ensure_workspace, ensure_templates
 
 def init_command(force: bool = False) -> str:
     """Initialize workspace directories and default templates."""
-    dirs_created, _ = ensure_workspace()
+    dirs_created, dirs_skipped = ensure_workspace()
     files_created = ensure_templates(force=force)
 
     lines = ["初始化完成！\n"]
@@ -27,6 +27,6 @@ def init_command(force: bool = False) -> str:
         lines.append("\n（未发现需要覆盖的模板，如需强制覆盖请确认模板目录存在）")
 
     lines.append("\n下一步建议：")
-    lines.append("  skill-forge ingest --type case --title \"案例标题\" --file ./case.md")
+    lines.append('  skill-forge ingest --type case --title "案例标题" --file ./case.md')
 
     return "\n".join(lines)

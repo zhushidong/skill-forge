@@ -2,16 +2,16 @@
 
 Status machine:
 - draft → trained: drills >= 3, avg_score >= 60
-- trained → tested: field_tests >= 1, review result = "推进" or "成交"
+- trained → tested: field_tests >= 1
 - tested → mature: field_tests >= 5, win_rate >= 0.6, avg_score >= 70
-- mature → retired: 90 days no use, or 3/5 failures, or manual
+- mature → retired: manual only
 
 All status transitions are CODE-ENFORCED, not just documentation.
 """
 from __future__ import annotations
 from pathlib import Path
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from .config import SKILLS_DIR
 from .storage import read_markdown, write_markdown, list_markdown_files, find_by_id
@@ -73,6 +73,7 @@ def update_skill_status(skill_path: Path) -> str:
     drills = metrics.get("drills", 0)
     field_tests = metrics.get("field_tests", 0)
     wins = metrics.get("wins", 0)
+    losses = metrics.get("losses", 0)
     avg_score = metrics.get("avg_score", 0)
 
     # draft → trained: drills >= 3 AND avg_score >= 60
@@ -95,22 +96,9 @@ def update_skill_status(skill_path: Path) -> str:
                 new_status = "mature"
                 fm["mature_at"] = _now_iso()
 
-    # mature → retired: check conditions
+    # mature → retired: manual only (no automatic retirement in current version)
     elif current_status == "mature":
-        last_used = metrics.get("last_used_at", "")
-        if last_used:
-            try:
-                last_used_dt = datetime.fromisoformat(last_used)
-                if datetime.now() - last_used_dt > timedelta(days=90):
-                    new_status = "retired"
-                    fm["retired_at"] = _now_iso()
-            except (ValueError, TypeError):
-                pass
-        
-        # Check failure rate: 3/5 recent failures
-        if field_tests >= 5 and losses >= 3:
-            new_status = "retired"
-            fm["retired_at"] = _now_iso()
+        pass
 
     if new_status != current_status:
         fm["status"] = new_status
@@ -188,7 +176,7 @@ def list_skills(status: str = "") -> list[dict]:
 
 
 def search_skills(query: str) -> list[dict]:
-    """Search skills by keyword in name, scenes, signals."""
+    """Search skills by keyword in name, scenarios, signals, problem."""
     all_skills = list_skills()
     query_lower = query.lower()
     results = []
@@ -198,12 +186,14 @@ def search_skills(query: str) -> list[dict]:
         # Match name
         if query_lower in skill.get("name", "").lower():
             score += 3
-        # Match applicable_scenarios
-        for scene in skill.get("applicable_scenarios", []):
+        # Match applicable_scenarios (with fallback to old 'scenes')
+        scenarios = skill.get("applicable_scenarios", []) or skill.get("scenes", [])
+        for scene in scenarios:
             if query_lower in scene.lower():
                 score += 2
-        # Match customer_signals
-        for signal in skill.get("customer_signals", []):
+        # Match customer_signals (with fallback to old 'signals')
+        signals = skill.get("customer_signals", []) or skill.get("signals", [])
+        for signal in signals:
             if query_lower in signal.lower():
                 score += 2
         # Match problem

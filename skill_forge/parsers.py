@@ -4,7 +4,34 @@ import json
 
 import yaml
 
-from .storage import _validate_path, MAX_FILE_SIZE
+from .storage import MAX_FILE_SIZE
+
+
+# ── External File Reader ───────────────────────────────────────
+
+def read_external_file(path: Path, max_size: int = MAX_FILE_SIZE) -> str:
+    """Read an arbitrary user-provided file with size protection.
+
+    Unlike safe_read_file, this does not restrict the path to the workspace,
+    because CLI commands explicitly ask the user for an external file path.
+    """
+    if not path.exists():
+        raise ValueError(f"文件不存在: {path}")
+    if not path.is_file():
+        raise ValueError(f"路径不是文件: {path}")
+
+    try:
+        with path.open('r', encoding='utf-8') as f:
+            content = f.read()
+            content_bytes = len(content.encode('utf-8'))
+            if content_bytes > max_size:
+                raise ValueError(
+                    f"文件过大: {content_bytes / 1024 / 1024:.1f}MB，"
+                    f"最大允许: {max_size / 1024 / 1024:.1f}MB"
+                )
+            return content
+    except UnicodeDecodeError:
+        raise ValueError("文件编码不是UTF-8")
 
 
 # ── Parser ─────────────────────────────────────────────────────
@@ -15,7 +42,8 @@ SUPPORTED_EXTENSIONS = {".md", ".txt", ".json", ".yaml", ".yml"}
 def parse_external_file(path: Path, asset_type: str = "auto") -> dict:
     """Parse an external file and return a standardized dict.
     
-    Validates path and uses atomic read to prevent TOCTOU.
+    Validates that the path exists and is a file, uses atomic read to prevent TOCTOU.
+    Read paths are not restricted to workspace because users may melt arbitrary files.
     
     Returns:
         {
@@ -25,12 +53,14 @@ def parse_external_file(path: Path, asset_type: str = "auto") -> dict:
             "metadata": {...}
         }
     """
-    # C1 fix: Validate path before reading
-    safe_path = _validate_path(path)
-    
-    # C3 fix: Atomic read - open first, then check size
+    if not path.exists():
+        raise ValueError(f"文件不存在: {path}")
+    if not path.is_file():
+        raise ValueError(f"路径不是文件: {path}")
+
+    # Atomic read - open first, then check size
     try:
-        with safe_path.open('r', encoding='utf-8') as f:
+        with path.open('r', encoding='utf-8') as f:
             text = f.read()
             # Check size AFTER reading (atomic)
             content_bytes = len(text.encode('utf-8'))
@@ -42,15 +72,15 @@ def parse_external_file(path: Path, asset_type: str = "auto") -> dict:
     except UnicodeDecodeError:
         raise ValueError("文件编码不是UTF-8")
 
-    suffix = safe_path.suffix.lower()
+    suffix = path.suffix.lower()
     if suffix not in SUPPORTED_EXTENSIONS:
         raise ValueError(
-            f"当前 MVP 只支持 md/txt/json/yaml/yml，请先将 {safe_path.name} 转成文本。"
+            f"当前 MVP 只支持 md/txt/json/yaml/yml，请先将 {path.name} 转成文本。"
         )
 
     metadata: dict = {}
     content = text
-    title = safe_path.stem
+    title = path.stem
 
     if suffix == ".json":
         try:
@@ -78,12 +108,23 @@ def parse_external_file(path: Path, asset_type: str = "auto") -> dict:
         except yaml.YAMLError:
             pass
 
-    # Determine asset type from extension/content
+    # Determine file type from extension
+    file_type = "markdown"
+    if suffix == ".json":
+        file_type = "json"
+    elif suffix in (".yaml", ".yml"):
+        file_type = "yaml"
+    elif suffix == ".txt":
+        file_type = "text"
+
+    # Determine asset type from extension/content (for template context)
+    guessed_asset_type = asset_type
     if asset_type == "auto":
-        asset_type = _guess_type(suffix, text, metadata)
+        guessed_asset_type = _guess_type(suffix, text, metadata)
 
     return {
-        "type": asset_type,
+        "type": file_type,
+        "asset_type": guessed_asset_type,
         "title": title,
         "content": text,
         "metadata": metadata,

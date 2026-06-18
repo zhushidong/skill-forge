@@ -1,10 +1,9 @@
 from __future__ import annotations
 import os
 import re
-import html
 from typing import Optional
 
-from .config import DEFAULT_MODEL
+from . import config
 
 
 # ── Input Sanitization (C1/C2: LLM Prompt Injection Prevention) ───
@@ -125,7 +124,7 @@ def sanitize_error_message(error: str) -> str:
     error_lower = error_str.lower()
     
     # Return user-friendly messages (never return filtered original)
-    if "api_key" in error_lower or "unauthorized" in error_lower or "401" in error_lower:
+    if "api_key" in error_lower or "sk-" in error_lower or "unauthorized" in error_lower or "401" in error_lower:
         return "API Key 无效或未设置"
     elif "rate_limit" in error_lower or "429" in error_lower:
         return "API 调用频率超限，请稍后再试"
@@ -151,14 +150,21 @@ DEFAULT_MAX_TOKENS = 4096
 
 
 def _create_client():
-    """Create OpenAI client with timeout."""
+    """Create OpenAI client with timeout and optional base URL."""
     from openai import OpenAI
-    api_key = os.getenv("OPENAI_API_KEY")
-    return OpenAI(
-        api_key=api_key,
-        timeout=DEFAULT_TIMEOUT,
-        max_retries=DEFAULT_MAX_RETRIES,
-    )
+    kwargs = {
+        "api_key": config.OPENAI_API_KEY,
+        "timeout": DEFAULT_TIMEOUT,
+        "max_retries": DEFAULT_MAX_RETRIES,
+    }
+    if config.OPENAI_BASE_URL:
+        kwargs["base_url"] = config.OPENAI_BASE_URL
+    return OpenAI(**kwargs)
+
+
+def has_api_key() -> bool:
+    """Check if an API key is configured."""
+    return bool(config.OPENAI_API_KEY)
 
 
 def run_llm(prompt: str, model: Optional[str] = None) -> str:
@@ -169,16 +175,18 @@ def run_llm(prompt: str, model: Optional[str] = None) -> str:
     
     Output is sanitized to prevent front matter injection.
     """
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    if not has_api_key():
         return _fallback_prompt(prompt)
 
     try:
         client = _create_client()
-        use_model = model or DEFAULT_MODEL
+        use_model = model or config.DEFAULT_MODEL
         response = client.chat.completions.create(
             model=use_model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": "你是一个商业 Skill 炼丹炉助手。请用 Markdown 输出。"},
+                {"role": "user", "content": prompt},
+            ],
             temperature=0.7,
             max_tokens=DEFAULT_MAX_TOKENS,
         )
@@ -193,14 +201,16 @@ def run_llm_with_history(prompt: str, history: list[dict], model: Optional[str] 
     
     Output is sanitized to prevent front matter injection.
     """
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    if not has_api_key():
         return _fallback_prompt(prompt)
 
     try:
         client = _create_client()
-        use_model = model or DEFAULT_MODEL
-        messages = [{"role": "user", "content": prompt}] + history
+        use_model = model or config.DEFAULT_MODEL
+        messages = [
+            {"role": "system", "content": "你是一个商业 Skill 炼丹炉助手。请用 Markdown 输出。"},
+            {"role": "user", "content": prompt},
+        ] + history
         response = client.chat.completions.create(
             model=use_model,
             messages=messages,
@@ -215,11 +225,12 @@ def run_llm_with_history(prompt: str, history: list[dict], model: Optional[str] 
 
 def _fallback_prompt(prompt: str, error: Optional[str] = None) -> str:
     """Generate fallback prompt for manual use when API key is not available."""
-    # M1 fix: Apply sanitization to fallback output
-    error_line = f"\n\n> **API 调用失败**: {error}\n" if error else ""
-    raw_output = f"""---
-
-## 未检测到 OPENAI_API_KEY
+    error_line = ""
+    if error:
+        safe_error = sanitize_error_message(error)
+        if safe_error not in ("未知错误", "操作失败，请检查输入和配置"):
+            error_line = f"\n> **API 调用失败**: {safe_error}\n"
+    return f"""## 未检测到 OPENAI_API_KEY
 
 你可以将以下 Prompt 复制到任意大模型中使用：
 
@@ -230,9 +241,8 @@ def _fallback_prompt(prompt: str, error: Optional[str] = None) -> str:
 - Gemini
 - 本地模型
 {error_line}
+
 ---
 
 {prompt}
 """
-    # Sanitize the output to prevent YAML injection
-    return sanitize_llm_output(raw_output)

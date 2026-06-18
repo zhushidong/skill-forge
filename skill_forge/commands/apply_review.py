@@ -132,13 +132,15 @@ def apply_review(
 
     # Inherit metrics from old version
     old_metrics = skill_fm.get("metrics") or {
-        "drills": 0, "field_tests": 0, "wins": 0, "losses": 0
+        "drills": 0, "field_tests": 0, "wins": 0, "losses": 0, "avg_score": 0, "last_used_at": ""
     }
     inherited_metrics = {
         "drills": int(old_metrics.get("drills", 0) or 0),
         "field_tests": int(old_metrics.get("field_tests", 0) or 0),
         "wins": int(old_metrics.get("wins", 0) or 0),
         "losses": int(old_metrics.get("losses", 0) or 0),
+        "avg_score": float(old_metrics.get("avg_score", 0) or 0),
+        "last_used_at": old_metrics.get("last_used_at", ""),
     }
 
     new_fm = {
@@ -146,13 +148,25 @@ def apply_review(
         "name": skill_fm.get("name", skill_name),
         "version": new_version,
         "status": "draft",
-        "source_ids": skill_fm.get("source_ids", []),
-        "source_type": skill_fm.get("source_type", "material"),
-        "scenes": skill_fm.get("scenes", []),
+        "domain": skill_fm.get("domain", "other"),
+        "category": skill_fm.get("category", ""),
+        "problem": skill_fm.get("problem", ""),
+        "goal": skill_fm.get("goal", ""),
+        "applicable_scenarios": skill_fm.get("applicable_scenarios", []),
+        "not_applicable_scenarios": skill_fm.get("not_applicable_scenarios", []),
         "customer_stages": skill_fm.get("customer_stages", []),
         "customer_types": skill_fm.get("customer_types", []),
-        "signals": skill_fm.get("signals", []),
-        "avoid_when": skill_fm.get("avoid_when", []),
+        "customer_signals": skill_fm.get("customer_signals", []),
+        "strategy": skill_fm.get("strategy", {"name": "", "steps": []}),
+        "forbidden_behaviors": skill_fm.get("forbidden_behaviors", []),
+        "steps": skill_fm.get("steps", []),
+        "example_lines": skill_fm.get("example_lines", []),
+        "drill_personas": skill_fm.get("drill_personas", []),
+        "evidence": skill_fm.get("evidence", {
+            "source_materials": [],
+            "drill_records": [],
+            "review_records": [],
+        }),
         "metrics": inherited_metrics,
         "inherited_metrics": True,
         "supersedes": old_id,

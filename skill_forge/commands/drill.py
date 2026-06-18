@@ -5,13 +5,12 @@ Scores are parsed from LLM output and stored in front matter.
 """
 from __future__ import annotations
 from pathlib import Path
-import os
 import re
 
 from ..config import SKILLS_DIR, DRILLS_DIR
 from ..storage import write_markdown, read_markdown, timestamp_id
 from ..templates import render_template
-from ..llm import run_llm, run_llm_with_history
+from ..llm import run_llm, run_llm_with_history, has_api_key
 from ..skill_manager import find_skill, update_skill_metrics, update_skill_status
 
 
@@ -84,7 +83,7 @@ def drill_command(skill: str, persona: str = "", rounds: int = 5, non_interactiv
     })
 
     # No API Key: output full prompt for manual use
-    if not os.getenv("OPENAI_API_KEY"):
+    if not has_api_key():
         drill_id = timestamp_id("drill")
         out_path = DRILLS_DIR / f"{drill_id}.md"
         frontmatter = {

@@ -1,13 +1,20 @@
 import os
 from pathlib import Path
 
-# Use __file__ to derive absolute project root
-PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if present
+load_dotenv()
+
+# CLI treats current working directory as project root
+PROJECT_ROOT = Path.cwd()
 
 DATA_DIR = PROJECT_ROOT / "data"
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 SAMPLES_DIR = PROJECT_ROOT / "samples"
 
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "")
 DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
 MATERIAL_TYPES = {
@@ -32,6 +39,32 @@ SKILL_STATUS_DIR = {
     "mature": "mature",
     "retired": "retired",
 }
+
+# Complete directory structure
+ALL_DIRS = [
+    "data/materials/articles",
+    "data/materials/books",
+    "data/materials/chatlogs",
+    "data/materials/cases",
+    "data/materials/comments",
+    "data/materials/external_agents",
+    "data/materials/external_skills",
+    "data/materials/prompts",
+    "data/materials/workflows",
+    "data/skills/draft",
+    "data/skills/trained",
+    "data/skills/tested",
+    "data/skills/mature",
+    "data/skills/retired",
+    "data/drills",
+    "data/field_logs",
+    "data/reviews",
+    "data/recommendations",
+    "data/proposals",
+    "data/imports",
+    "data/profiles",
+    "templates",
+]
 
 MATERIAL_DIR = DATA_DIR / "materials"
 SKILLS_DIR = DATA_DIR / "skills"

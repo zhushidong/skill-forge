@@ -8,7 +8,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import SKILLS_DIR, RECOMMENDATIONS_DIR
-from ..storage import read_markdown, list_markdown_files, timestamp_id, write_markdown, safe_read_file
+from ..storage import read_markdown, list_markdown_files, timestamp_id, write_markdown
+from ..parsers import read_external_file
 from ..templates import render_template
 from ..llm import run_llm
 
@@ -17,8 +18,8 @@ def recommend_command(file: str, context: str = "") -> str:
     """Recommend next steps based on current chat and available Skills."""
     path = Path(file)
     try:
-        chatlog = safe_read_file(path)
-    except ValueError as e:
+        chatlog = read_external_file(path)
+    except (ValueError, FileNotFoundError, OSError) as e:
         return f"文件读取失败: {e}"
 
     # Read all skill front matters
@@ -38,6 +39,8 @@ def recommend_command(file: str, context: str = "") -> str:
             # Old schema: scenes, signals
             scenes = fm.get("applicable_scenarios", []) or fm.get("scenes", [])
             customer_signals = fm.get("customer_signals", []) or fm.get("signals", [])
+            customer_types = fm.get("customer_types", []) or []
+            customer_stages = fm.get("customer_stages", []) or []
             # Also match against name and domain keywords
             name_keywords = [w for w in skill_name.split() if len(w) > 1]
             status = fm.get("status", "draft")
@@ -66,6 +69,14 @@ def recommend_command(file: str, context: str = "") -> str:
                 if scene.lower() in chat_lower or scene.lower() in context_lower:
                     score += 1
                     matched_scenes.append(scene)
+            for ctype in customer_types:
+                if ctype.lower() in chat_lower or ctype.lower() in context_lower:
+                    score += 1
+                    matched_scenes.append(f"客户类型: {ctype}")
+            for stage in customer_stages:
+                if stage.lower() in chat_lower or stage.lower() in context_lower:
+                    score += 1
+                    matched_scenes.append(f"客户阶段: {stage}")
             # Fallback: match name keywords against chat content
             for kw in name_keywords:
                 if kw.lower() in chat_lower or kw.lower() in context_lower:
@@ -108,7 +119,8 @@ def recommend_command(file: str, context: str = "") -> str:
                     win_rate = wins / field_tests
                     explanation_parts.append(f"历史使用成功率：{win_rate:.0%}")
                 explanation_parts.append(f"Skill 状态：{status}")
-                explanation_parts.append(f"平均评分：{avg_score:.0f}")
+                if avg_score > 0:
+                    explanation_parts.append(f"平均评分：{avg_score:.0f}")
                 
                 candidate = {
                     "id": skill_id,
@@ -147,7 +159,8 @@ def recommend_command(file: str, context: str = "") -> str:
             candidate_text += f"- 匹配信号: {', '.join(cs['matched_signals']) or '无'}\n"
             candidate_text += f"- 匹配场景: {', '.join(cs['matched_scenes']) or '无'}\n"
             m = cs['metrics']
-            candidate_text += f"- 演练: {m['drills']}次, 实战: {m['field_tests']}次, 胜率: {m['wins']}/{m['field_tests']}\n"
+            win_rate_str = f"{m['wins']}/{m['field_tests']}" if m['field_tests'] > 0 else "暂无"
+            candidate_text += f"- 演练: {m['drills']}次, 实战: {m['field_tests']}次, 胜率: {win_rate_str}\n"
             candidate_text += f"\n**推荐原因：**\n{cs['explanation']}\n"
             if cs['risk_warnings']:
                 candidate_text += f"\n**风险提醒：**\n"

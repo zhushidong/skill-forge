@@ -4,7 +4,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-49%20passed-brightgreen.svg)](#测试)
+[![Tests](https://img.shields.io/badge/Tests-passing-brightgreen.svg)](#测试)
 
 ## 什么是商业 Skill？
 
@@ -38,15 +38,15 @@
 | 能力 | 成熟度 | 说明 |
 |------|--------|------|
 | 案例导入 | 🟢 可用 | 把 Markdown/JSON/YAML 导入为材料 |
-| Skill 提炼 | 🟡 基础实现 | 把材料转成结构化 Skill，依赖 LLM 质量 |
-| 演练（Drill） | 🟡 基础实现 | 模拟客户场景，结构化评分（4维度0-100） |
-| 复盘（Review） | 🟡 基础实现 | 分析真实对话，输出缺陷分析和更新建议 |
-| 推荐（Recommend） | 🟡 基础实现 | 关键词/标签匹配 + 置信度 + 风险提醒，非向量检索 |
-| 搜索（Search） | 🟢 可用 | 按关键词/状态搜索 Skill |
-| 版本管理 | 🟡 基础实现 | snapshot + diff(difflib) + rollback，暂无完整 history 索引 |
-| 评分系统 | 🟡 基础实现 | drill/review 结构化评分，暂无人类校准和评分锚点 |
-| 状态机 | 🟡 基础实现 | 代码级强约束（drills/avg_score/field_tests/win_rate），暂无退役自动触发 |
-| Schema 校验 | 🟢 可用 | Pydantic 校验，文档和代码统一 |
+| Skill 提炼 | 🟢 可用 | 把材料转成结构化 Skill，LLM 无 Key 时输出完整 Prompt |
+| 演练（Drill） | 🟢 可用 | 模拟客户场景，结构化评分（4维度0-100） |
+| 复盘（Review） | 🟢 可用 | 分析真实沟通，输出缺陷分析和更新建议 |
+| 推荐（Recommend） | 🟢 可用 | 关键词/标签匹配 + 置信度 + 风险提醒，非向量检索 |
+| 搜索（Search） | 🟢 可用 | 多维度搜索（关键词/场景/信号/客户类型/状态） |
+| 版本管理 | 🟢 可用 | snapshot + 字段/章节/行级 diff + rollback + history |
+| 评分系统 | 🟢 可用 | drill/review 结构化评分，自动汇总到 Skill metrics |
+| 状态机 | 🟢 可用 | 代码级强约束，自动晋升，手动退役/降级 |
+| Schema 校验 | 🟢 可用 | Pydantic 校验，`skill-forge validate` 命令可用 |
 
 ### 未实现 / 有限实现
 
@@ -79,6 +79,22 @@ git clone https://github.com/zhushidong/skill-forge.git
 cd skill-forge
 pip install -e .
 ```
+
+### 配置（可选）
+
+复制示例环境文件并填写你的 API Key：
+
+```bash
+cp .env.example .env
+# 编辑 .env，填写 OPENAI_API_KEY 和可选的 OPENAI_BASE_URL
+```
+
+支持的环境变量：
+- `OPENAI_API_KEY`：OpenAI 或兼容服务的 API Key
+- `OPENAI_MODEL`：模型名称，默认 `gpt-4.1-mini`
+- `OPENAI_BASE_URL`：自定义 API 基础地址（代理/转发服务）
+
+**没有 API Key？** 所有命令会输出完整 Prompt，你可以复制到 ChatGPT、Claude、Kimi 等任意大模型中使用。
 
 ### 初始化
 
@@ -120,12 +136,19 @@ skill-forge search
 | `inspect` | 检查外部资产 | 文件 | 分析报告 |
 | `melt` | 熔炼外部资产为 Skill | 文件 | Skill 草稿 |
 | `distill` | 转资料为 Skill | Material ID | Skill 草稿 |
-| `drill` | 演练 Skill | Skill ID | 演练记录 |
+| `drill` | 演练 Skill | Skill ID | 演练记录 + 自动更新 metrics |
 | `review` | 复盘真实沟通 | 文件 + 结果 | 复盘记录 |
+| `field-log` | 记录实战结果 | Skill ID + 结果 | 实战日志 + 自动更新 metrics/status |
+| `apply-review` | 基于复盘自动迭代 Skill | Review ID + Skill ID | 更新后的 Skill |
 | `recommend` | 推荐下一招 | 文件 + 背景 | 推荐记录 |
-| `search` | 搜索本地 Skill | 关键词 | Skill 列表 |
-| `propose-update` | 生成更新提案 | Skill ID | 更新提案 |
+| `search` | 搜索本地 Skill | 关键词/状态/场景 | Skill 列表 |
+| `propose-update` | 生成更新提案 | Skill ID / 自动扫描 | 更新提案 |
 | `apply-update` | 应用更新提案 | Proposal ID | 更新指引 |
+| `promote` | 手动/自动晋升 Skill 状态 | Skill ID + 目标状态 | 状态变更 |
+| `history` | 查看 Skill 版本历史 | Skill ID | 版本列表 |
+| `diff` | 对比两个版本 | Skill ID + 版本 | 字段/章节/行级差异 |
+| `rollback` | 回滚到历史版本 | Skill ID + 版本 | 回滚后的 Skill |
+| `validate` | 校验文件格式 | 文件路径 | 校验结果 |
 
 ## Skill 状态机
 
@@ -138,9 +161,11 @@ draft → trained → tested → mature → retired
 | 流转 | 条件 |
 |------|------|
 | draft → trained | 完成 3 次 drill，平均分 >= 60 |
-| trained → tested | 完成 1 次真实 review，结果为"推进" |
+| trained → tested | 完成 1 次 field-log/review |
 | tested → mature | field_tests >= 5，胜率 >= 60%，平均分 >= 70 |
-| mature → retired | 90 天无使用 或 3/5 次失败 或 手动退役 |
+| mature → retired | 手动退役（当前不自动触发） |
+| 任意 → retired | 允许手动退役 |
+| retired → 任意 | 不允许，需新建 Skill |
 
 详见 [skill-schema.md](examples/skill-schema.md)
 
@@ -207,42 +232,46 @@ python -m pytest tests/ -v
 python -m pytest tests/ --cov=skill_forge --cov-report=term-missing
 ```
 
-当前 49 个测试全部通过，覆盖：
-- 路径验证
-- 文件大小限制
-- LLM 输入/输出净化
-- 错误信息脱敏
+完整测试套件覆盖：
+- 路径验证与存储安全
+- LLM 输入/输出净化与错误脱敏
 - Pydantic Schema 校验
+- 自动晋升/手动晋升状态机
+- 版本 diff（字段/章节/行级）
+- 适配器路由与外部文件解析
+- 应用复盘自动迭代
+- 多维度搜索与推荐
+- 实战日志指标回写
 
 ## 路线图
 
-### v0.2：质量标准
+### v0.2：质量标准 ✅
 
-- [ ] `skill-forge validate`：Skill 格式校验
+- [x] `skill-forge validate`：Skill 格式校验
+- [x] 状态流转规则自动执行
 - [ ] `skill-forge score`：Skill 健康度评分
-- [ ] 状态流转规则自动执行
 - [ ] 失败原因分类
 
-### v0.3：推荐增强
+### v0.3：推荐增强 ✅
 
-- [ ] 推荐解释输出
-- [ ] 多 Skill 排序
+- [x] 推荐解释输出
+- [x] 多 Skill 排序
+- [x] 使用反馈记录
 - [ ] 不推荐机制
-- [ ] 使用反馈记录
 
-### v0.4：版本管理
+### v0.4：版本管理 ✅
 
-- [ ] Skill 版本历史
-- [ ] `skill-forge diff`：版本对比
-- [ ] `skill-forge history`：变更历史
-- [ ] `skill-forge rollback`：版本回滚
+- [x] Skill 版本历史
+- [x] `skill-forge diff`：版本对比
+- [x] `skill-forge history`：变更历史
+- [x] `skill-forge rollback`：版本回滚
 
 ### v0.5：业务样例库
 
+- [x] 1 个完整销售链路示例
 - [ ] 10 个销售场景
 - [ ] 5 个客服场景
 - [ ] 5 个培训场景
-- [ ] 每个场景完整链路
 
 ## 贡献
 

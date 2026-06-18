@@ -81,24 +81,24 @@ def safe_read_file(
 # ── Workspace ──────────────────────────────────────────────────
 
 def ensure_workspace() -> tuple[list[str], list[str]]:
-    """Create directory structure and default templates. Returns (dirs_created, files_created)."""
-    dirs_created = []
-    files_created = []
+    """Create directory structure. Returns (dirs_created, dirs_skipped)."""
+    from . import config
+    created: list[str] = []
+    skipped: list[str] = []
+    for d in config.ALL_DIRS:
+        p = config.ROOT_DIR / d
+        if p.exists():
+            skipped.append(d)
+        else:
+            p.mkdir(parents=True, exist_ok=True)
+            created.append(d)
+    return created, skipped
 
-    dirs = [
-        DATA_DIR / "materials" / v for v in MATERIAL_TYPES.values()
-    ] + [
-        SKILLS_DIR / s for s in SKILL_STATUSES
-    ] + [
-        DRILLS_DIR, FIELD_LOGS_DIR, REVIEWS_DIR, RECOMMENDATIONS_DIR, IMPORTS_DIR, PROFILES_DIR,
-    ]
 
-    for d in dirs:
-        if not d.exists():
-            d.mkdir(parents=True, exist_ok=True)
-            dirs_created.append(str(d))
-
-    return dirs_created, files_created
+def workspace_initialized() -> bool:
+    """Check if workspace has been initialized."""
+    from . import config
+    return config.DATA_DIR.exists() and config.TEMPLATES_DIR.exists()
 
 
 def ensure_templates(force: bool = False) -> list[str]:
@@ -146,13 +146,21 @@ def read_markdown(path: Path) -> tuple[dict, str]:
     """
     safe_path = _validate_path(path)
     text = safe_path.read_text(encoding="utf-8")
+    return extract_frontmatter(text)
+
+
+def extract_frontmatter(text: str) -> tuple[dict, str]:
+    """Extract YAML front matter and body from markdown text."""
     if text.startswith(FRONT_MATTER_SEP):
         parts = text.split(FRONT_MATTER_SEP, 2)
         if len(parts) >= 3:
-            fm = yaml.safe_load(parts[1]) or {}
+            try:
+                fm = yaml.safe_load(parts[1]) or {}
+            except yaml.YAMLError:
+                fm = {}
             body = parts[2].strip()
             return fm, body
-    return {}, text
+    return {}, text.strip()
 
 
 def list_markdown_files(directory: Path) -> list[Path]:
@@ -212,8 +220,3 @@ def all_skill_files() -> list[Path]:
             all_files.extend(status_dir.rglob("*.md"))
     return sorted(all_files)
 
-
-def workspace_initialized() -> bool:
-    """Check if workspace has been initialized."""
-    from .config import DATA_DIR, TEMPLATES_DIR
-    return DATA_DIR.exists() and TEMPLATES_DIR.exists()

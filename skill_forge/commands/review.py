@@ -8,7 +8,8 @@ from pathlib import Path
 import re
 
 from ..config import REVIEWS_DIR, SKILLS_DIR
-from ..storage import write_markdown, read_markdown, timestamp_id, safe_read_file
+from ..storage import write_markdown, read_markdown, timestamp_id
+from ..parsers import read_external_file
 from ..templates import render_template
 from ..llm import run_llm
 from ..skill_manager import find_skill, increment_field_test, update_skill_status
@@ -50,8 +51,8 @@ def review_command(file: str, result: str, skill: str = "") -> str:
     """Review a real customer interaction with actionable suggestions."""
     path = Path(file)
     try:
-        chatlog = safe_read_file(path)
-    except ValueError as e:
+        chatlog = read_external_file(path)
+    except (ValueError, FileNotFoundError, OSError) as e:
         return f"文件读取失败: {e}"
 
     # Find skill content if specified

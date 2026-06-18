@@ -2,7 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..config import IMPORTS_DIR
-from ..storage import write_markdown, timestamp_id, safe_read_file
+from ..storage import write_markdown, timestamp_id
 from ..parsers import parse_external_file
 from ..adapters import to_text
 from ..templates import render_template
@@ -12,18 +12,14 @@ from ..llm import run_llm
 def inspect_command(file: str, asset_type: str = "auto") -> str:
     """Inspect an external asset and identify capabilities for melting."""
     path = Path(file)
-    try:
-        content = safe_read_file(path)
-    except ValueError as e:
-        return f"文件读取失败: {e}"
 
     try:
         parsed = parse_external_file(path, asset_type)
-    except ValueError as e:
-        return str(e)
+    except (ValueError, FileNotFoundError, OSError) as e:
+        return f"文件读取失败: {e}"
 
     # Convert to unified text
-    unified_text = to_text(parsed)
+    unified_text = to_text(parsed, asset_type=parsed.get("asset_type", asset_type))
 
     # Render inspect template
     prompt = render_template("inspect.md", {

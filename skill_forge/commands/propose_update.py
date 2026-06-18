@@ -1,108 +1,172 @@
+"""propose-update command: generate update proposals based on field data."""
 from __future__ import annotations
 from pathlib import Path
 from datetime import datetime
 
-from ..config import SKILLS_DIR
-from ..storage import write_markdown, read_markdown, timestamp_id
+from ..config import SKILLS_DIR, FIELD_LOGS_DIR, REVIEWS_DIR, PROPOSALS_DIR
+from ..storage import write_markdown, read_markdown, timestamp_id, list_markdown_files
 from ..skill_manager import find_skill
+from ..templates import render_template
 from ..llm import run_llm
 
 
-def propose_update_command(skill: str, reason: str = "") -> str:
-    """Generate a proposed update for a skill based on reviews and drills."""
-    skill_path = find_skill(skill) if not Path(skill).exists() else Path(skill)
+def _find_related_records(skill_id: str):
+    """Find reviews and field logs related to a skill."""
+    reviews = []
+    field_logs = []
 
-    if not skill_path or not skill_path.exists():
-        return (
-            f"找不到 skill：{skill}\n\n"
-            "你可以：\n"
-            "1. 检查 data/skills/ 目录\n"
-            "2. 使用完整文件路径\n"
-            "3. 先运行 skill-forge distill 生成 Skill"
-        )
+    for md_file in list_markdown_files(REVIEWS_DIR):
+        try:
+            fm, body = read_markdown(md_file)
+            if fm.get("skill_id") == skill_id:
+                reviews.append((fm, body))
+        except Exception:
+            continue
 
-    fm, body = read_markdown(skill_path)
+    for md_file in list_markdown_files(FIELD_LOGS_DIR):
+        try:
+            fm, body = read_markdown(md_file)
+            if fm.get("skill_id") == skill_id:
+                field_logs.append((fm, body))
+        except Exception:
+            continue
 
-    # Build context for LLM
-    context = f"""当前 Skill 内容：
+    return reviews, field_logs
 
-{body}
 
-"""
-    if reason:
-        context += f"更新原因：{reason}\n\n"
+def _summarize_reviews(reviews: list) -> str:
+    """Summarize review records for prompt."""
+    if not reviews:
+        return "（无复盘记录）"
+    lines = []
+    for fm, body in reviews[:5]:
+        lines.append(f"- 结果: {fm.get('result', '未知')}")
+        lines.append(f"  评分: {fm.get('total_score', 'N/A')}")
+        lines.append(f"  内容摘要: {body[:200].replace(chr(10), ' ')}...")
+    return "\n".join(lines)
 
-    context += """请基于以上内容，提出具体的更新建议。
 
-要求：
-1. 不要重写整个 Skill，只提出需要修改的部分
-2. 明确标注要修改的章节
-3. 给出修改前和修改后的对比
-4. 说明修改理由
-5. 如果不需要修改，请明确说明
+def _summarize_field_logs(field_logs: list) -> str:
+    """Summarize field log records for prompt."""
+    if not field_logs:
+        return "（无实战日志）"
+    lines = []
+    for fm, body in field_logs[:10]:
+        lines.append(f"- 结果: {fm.get('result', '未知')}, 客户类型: {fm.get('customer_type', '未指定')}, 场景: {fm.get('scene', '未指定')}")
+        if body.strip():
+            lines.append(f"  内容: {body[:150].replace(chr(10), ' ')}...")
+    return "\n".join(lines)
 
-请按以下格式输出：
 
-## 更新提案
+def _generate_proposal(skill_path: Path, skill_fm: dict, skill_body: str, reviews: list, field_logs: list, note: str = "") -> Path:
+    """Generate and save a proposal for a skill."""
+    wins = 0
+    losses = 0
+    for fm, _ in field_logs:
+        result = fm.get("result", "")
+        if result in ("成交", "推进"):
+            wins += 1
+        elif result in ("失败", "流失", "搁置", "停滞"):
+            losses += 1
 
-### 修改 1：[章节名]
-**修改前：**
-[原文]
+    reviews_summary = _summarize_reviews(reviews)
+    field_logs_summary = _summarize_field_logs(field_logs)
 
-**修改后：**
-[新内容]
+    prompt = render_template("propose_update.md", {
+        "skill_name": skill_fm.get("name", skill_path.stem),
+        "skill_body": skill_body,
+        "wins": wins,
+        "losses": losses,
+        "reviews_summary": reviews_summary,
+        "field_logs_summary": field_logs_summary,
+    })
 
-**理由：**
-[为什么这样改]
+    result = run_llm(prompt)
 
-### 修改 2：[章节名]
-...
-
-## 总结
-[整体评估和建议]
-"""
-
-    result = run_llm(context)
-
-    # Save proposal
     proposal_id = timestamp_id("proposal")
-    proposal_dir = SKILLS_DIR / "proposals"
-    proposal_dir.mkdir(parents=True, exist_ok=True)
-    out_path = proposal_dir / f"{proposal_id}-proposal.md"
+    PROPOSALS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = PROPOSALS_DIR / f"{proposal_id}.md"
     frontmatter = {
         "id": proposal_id,
-        "skill_id": skill,
-        "skill_name": fm.get("name", ""),
-        "reason": reason,
+        "type": "proposal",
+        "skill_id": skill_fm.get("id", ""),
+        "skill_name": skill_fm.get("name", ""),
+        "wins": wins,
+        "losses": losses,
+        "note": note,
         "created_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
     }
     write_markdown(out_path, frontmatter, result)
+    return out_path
 
-    lines = [
-        "更新提案已生成：",
-        f"  - 路径: {out_path}",
-        f"  - Skill: {fm.get('name', skill)}",
-        "",
-        "下一步：",
-        "  1. 查看提案内容",
-        "  2. 确认修改后运行：",
-        f"     skill-forge apply-update --proposal {proposal_id}",
-        "  3. 或手动编辑 Skill 文件",
-    ]
+
+def propose_update_command(skill: str = "", reason: str = "", limit: int = 5) -> str:
+    """Generate update proposals for mature/tested skills or a single skill."""
+    if skill:
+        skill_path = find_skill(skill) if not Path(skill).exists() else Path(skill)
+        if not skill_path or not skill_path.exists():
+            return (
+                f"找不到 skill：{skill}\n\n"
+                "你可以：\n"
+                "1. 检查 data/skills/ 目录\n"
+                "2. 使用完整文件路径\n"
+                "3. 先运行 skill-forge distill 生成 Skill"
+            )
+        fm, body = read_markdown(skill_path)
+        reviews, field_logs = _find_related_records(fm.get("id", ""))
+        out_path = _generate_proposal(skill_path, fm, body, reviews, field_logs, reason)
+        return (
+            f"更新提案已生成：\n"
+            f"  - 路径: {out_path}\n"
+            f"  - Skill: {fm.get('name', skill)}\n\n"
+            f"下一步建议：\n"
+            f"  skill-forge apply-review --review <review-id> --skill {fm.get('id', skill)}"
+        )
+
+    # Scan all mature/tested skills
+    targets = []
+    for status in ["mature", "tested"]:
+        status_dir = SKILLS_DIR / status
+        if not status_dir.exists():
+            continue
+        for md_file in list_markdown_files(status_dir):
+            try:
+                fm, body = read_markdown(md_file)
+                targets.append((md_file, fm, body))
+            except Exception:
+                continue
+
+    if not targets:
+        return "未找到 mature/tested 状态的 Skill。请先通过 drill/review/field-log 提升 Skill 状态。"
+
+    generated = []
+    for skill_path, fm, body in targets[:limit]:
+        reviews, field_logs = _find_related_records(fm.get("id", ""))
+        # Skip skills with no field data
+        if not reviews and not field_logs:
+            continue
+        out_path = _generate_proposal(skill_path, fm, body, reviews, field_logs, reason)
+        generated.append((fm.get("name", skill_path.stem), fm.get("id", ""), out_path))
+
+    if not generated:
+        return "找到 mature/tested Skill，但都没有关联的复盘或实战日志，无法生成数据驱动的提案。"
+
+    lines = [f"已生成 {len(generated)} 个更新提案：\n"]
+    for name, sid, path in generated:
+        lines.append(f"  - {name} ({sid})")
+        lines.append(f"    提案: {path}")
+    lines.append("\n下一步建议：")
+    lines.append("  skill-forge apply-review --review <review-id> --skill <skill-id>")
     return "\n".join(lines)
 
 
 def apply_update_command(proposal: str, skill: str = "") -> str:
-    """Apply a proposed update to a skill. Requires human confirmation."""
-    from ..config import SKILLS_DIR as SD
-    proposal_dir = SD / "proposals"
-
-    # Find proposal
+    """Apply a proposed update to a skill (MVP: manual guidance only)."""
     proposal_path = None
     if Path(proposal).exists():
         proposal_path = Path(proposal)
     else:
-        for md_file in proposal_dir.glob("*.md"):
+        for md_file in PROPOSALS_DIR.glob("*.md"):
             try:
                 fm, _ = read_markdown(md_file)
                 if fm.get("id") == proposal:
@@ -124,8 +188,6 @@ def apply_update_command(proposal: str, skill: str = "") -> str:
     if not skill_path or not skill_path.exists():
         return f"找不到 Skill：{skill_id}"
 
-    # For MVP, just save the proposal as a diff file for manual review
-    # Auto-apply would be dangerous without human confirmation
     skill_fm, skill_body = read_markdown(skill_path)
 
     diff_content = f"""# Skill 更新记录
@@ -143,7 +205,7 @@ def apply_update_command(proposal: str, skill: str = "") -> str:
 
 ## 手动更新指引
 
-请根据提案内容手动编辑 Skill 文件。
+请根据提案内容手动编辑 Skill 文件，或使用 apply-review 基于复盘自动迭代。
 
 更新后，建议：
 1. 运行 drill 验证效果
@@ -168,6 +230,6 @@ def apply_update_command(proposal: str, skill: str = "") -> str:
         f"  - 路径: {out_path}",
         f"  - Skill: {skill_fm.get('name', skill_id)}",
         "",
-        "当前版本不会自动修改 Skill，请手动编辑后运行 drill 验证。",
+        "当前版本不会自动修改 Skill，请使用 apply-review 命令基于复盘自动迭代，或手动编辑。",
     ]
     return "\n".join(lines)
